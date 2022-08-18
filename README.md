@@ -1,4 +1,4 @@
-# From Assemblies to feature (Prokaryots)
+# From Assemblies to feature (Prokaryotes)
 
 These scripts detect features of interest in prokaryotic assemblies. Each perl script uses genome assembly and the sequence of your feature of interest and outputs a descriptive table, the alignment of your feature against the feature in the assembly. 
 
