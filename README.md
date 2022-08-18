@@ -15,12 +15,12 @@ The assemblies can have any kind of extension.
 ## Dependencies 
 Please make sure you have the following dependencies in your computer:											
 
-Programs in $PATH: Blast, prodigal and samtools.
-R packages: "msa", "reshape2", "Biostrings", "seqinr"
+- Programs in $PATH: Blast, prodigal and samtools. 
+- R packages: "msa", "reshape2", "Biostrings", "seqinr"
 
 optional (only if you want to predict plasmids)
 
-plasmid prediction: https://github.com/Shamir-Lab/PlasClass
+- plasmid prediction: https://github.com/Shamir-Lab/PlasClass
 
 The program has been parallelised for efficiency.
  
