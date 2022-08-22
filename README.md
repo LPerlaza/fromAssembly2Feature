@@ -1,16 +1,14 @@
-# From Assemblies to feature (Prokaryotes)
+# From Assemblies to Feature (Prokaryotes)
 
-These scripts detect features of interest in prokaryotic assemblies. Each perl script uses genome assembly and the sequence of your feature of interest and outputs a descriptive table, the alignment of your feature against the feature in the assembly. 
-
+These scripts detect features of interest in prokaryotic assemblies. Each perl script uses genome assembly and the sequence of your feature of interest and outputs a descriptive table, the alignment of your feature against the feature in the assembly and the peptide sequences (when applies). These scripts have been designed to emulate manually curated alignmets, they are also execute in parallel. These characteristics allow you to go throught a large number of interesting features without the time comsuming task of exploring each sequence manually. Please reach out if you find inconsistences.
 
 ## Requires
  
-The required inputs are assemblies and genes in fasta formats.
-The genomes must be located in a folder together with not additional files. 
-The genes of interest must be located in a folder together with not additional files.
-The genes must have the extension ".fasta" as it is used as a tag for handling file in the program. 
-The assemblies can have any kind of extension. 
-
+- The required inputs are assemblies and genes in fasta formats. 
+- The genomes must be located in a folder together with not additional files.  
+- The genes of interest must be located in a folder together with not additional files. 
+- The genes must have the extension ".fasta" as it is used as a tag for handling file in the program.  
+- The assemblies can have any kind of extension.  
 
 ## Dependencies 
 Please make sure you have the following dependencies in your computer:											
@@ -21,9 +19,16 @@ Please make sure you have the following dependencies in your computer:
 optional (only if you want to predict plasmids)
 
 - plasmid prediction: https://github.com/Shamir-Lab/PlasClass
-
-The program has been parallelised for efficiency.
  
+## Conda env
+
+You can create a conda environment with all the dependencies:
+
+```
+conda create -c bioconda -c conda-forge --name fromAssembly2feature python=3.8 r-base bioconductor-biocinstaller r-biocmanager bioconductor-biostrings r-seqinr bioconductor-msa r-reshape2 prodigal samtools blast plasclass
+conda activate fromAssembly2feature
+```
+
 ## INSTALL 
 ```
 git clone https://github.com/LPerlaza/Assembly2Gene.git
@@ -31,8 +36,7 @@ cd Assembly2Gene
 chmod a+x fromAssembly2gene.pl
 ```	 		
 
-
-# From Assembly to Gene
+# From Assembly to Gene (fromAssembly2gene.pl)
 Detect coding genes in an assembly, and get their alignments and description using fromAssembly2gene. fromAssembly2gene is a perl script run in command line that uses several available programs and R packages to identify genes of your interests in an assembled genome and outputs a descriptive table, the alignment of your gene against the gene in the assembly and the predicted peptide.
 
 
@@ -43,10 +47,10 @@ It runs several steps:
 3. Refines the alignments using an R scripts using the "msa", "reshape2", "Biostrings", "seqinr" packages
 4. Using the alignments prints out a table that describes the findings. It generates descriptive tables of presence, absence and truncated genes, curated alignments and peptides predictions
 
-The alternative run predicting plasmids:
+The alternative run plasmids predictions:
 
-```--plasmid -p``` options. These setting works similarly with the exception that before the prediction of genes, it uses "PlasClass" to identify plasmids (https://github.com/Shamir-Lab/PlasClass)
-it separates chromosome and plasmids from assembled genomes and find the genes of your interest.	
+```--plasmid -p``` options. This setting works similarly with the exception that before the prediction of genes, it uses "PlasClass" to identify plasmids (https://github.com/Shamir-Lab/PlasClass)
+it separates chromosome and plasmids from assembled genomes and find the genes of your interest identifying if they are in the plasmid or in the chromosome.	
 
 
 ## RUN
