@@ -25,8 +25,9 @@ optional (only if you want to predict plasmids)
 You can create a conda environment with all the dependencies:
 
 ```
-conda create -c bioconda -c conda-forge --name fromAssembly2feature python=3.8 r-base bioconductor-biocinstaller r-biocmanager bioconductor-biostrings r-seqinr bioconductor-msa r-reshape2 prodigal samtools blast plasclass
+conda create -c bioconda -c conda-forge --name fromAssembly2feature prodigal samtools blast plasclass
 conda activate fromAssembly2feature
+
 ```
 
 ## INSTALL 

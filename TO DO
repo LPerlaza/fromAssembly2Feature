@@ -1,0 +1,60 @@
+### TO DO
+#add parameters TRUE/FLASE to skip steps
+#check for dependencies before starting
+#fork with a set number of cores-DONE
+#remove duplication in final table -no necesary
+#fusion gff and fasta -post processing
+#annotate gff with table as reference -post processing
+#agregar coordenadas a los outputs - DONE
+#alignear con peptido -DONE
+#agregar porcentaje de variabilidad con peptidos -DONE
+#agregar posicion de las copias -Done necesito que los procentajes de similaridad correspondan a cada copia diferente
+#add a spining wheel
+#my $waiting=();
+#while( $waiting or 1 ) {
+#    spin();
+#}
+
+#{
+#    my $c=0;  # closure to remember spin state
+ #   sub spin {
+  #      local $| = 1;
+  #      print "\r", qw( | / - \ )[$c++%4];
+  #      select undef, undef, undef, 0.25;  # sleep 250 msec
+   # }
+#}
+
+#el enter del final de los genes todavia esta molestando 
+#arreglar stadisticas de la segunda copia
+#arreglar classification para que se base en el porcentaje de similaridad con la proteina menos del 60 es truncada
+
+
+
+#afork, the first argument is an array - a child will be 
+#forked for each array element. The second argument indicates the maximum 
+#number of children that may be alive at one time. The third argument is a 
+#code reference; this is the code that will be executed by the child. One 
+#argument will be given to this code fragment; for mfork it will be an increasing number,
+#starting at one. Each next child gets the next number. For afork, the array element is 
+#passed. Note that this code will assume no other children will be spawned, 
+#and that $SIG {CHLD} hasn't been set to IGNORE. 
+
+
+#https://www.perlmonks.org/?node_id=175715
+
+#######
+##usage afork(@array,$numberofcores,\&subroutine);
+
+#sub normal(\@&){
+
+#my ($data, $code) = @_;
+# foreach my $sequence(@$data){
+#  $code -> ($sequence);
+# }
+#}
+#normal(@seq,\&sub);
+
+
+
+## function combine plasmid and chromosomes make a function for starting variables all functions have the same
+

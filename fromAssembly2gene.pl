@@ -9,44 +9,13 @@ use File::Spec;
 use Data::Dumper;
 use File::Copy;
 
- 
-### TO DO
-#add parameters TRUE/FLASE to skip steps
-#check for dependencies before starting
-#fork with a set number of cores-DONE
-#remove duplication in final table -no necesary
-#fusion gff and fasta -post processing
-#annotate gff with table as reference -post processing
-#agregar coordenadas a los outputs - DONE
-#alignear con peptido -DONE
-#agregar porcentaje de variabilidad con peptidos -DONE
-#agregar posicion de las copias -Done necesito que los procentajes de similaridad correspondan a cada copia diferente
-#add a spining wheel
-#my $waiting=();
-#while( $waiting or 1 ) {
-#    spin();
-#}
 
-#{
-#    my $c=0;  # closure to remember spin state
- #   sub spin {
-  #      local $| = 1;
-  #      print "\r", qw( | / - \ )[$c++%4];
-  #      select undef, undef, undef, 0.25;  # sleep 250 msec
-   # }
-#}
-
-#el enter del final de los genes todavia esta molestando 
-#arreglar stadisticas de la segunda copia
-#arreglar classification para que se base en el porcentaje de similaridad con la proteina menos del 60 es truncada
-
-
-
-## run like ./fromAssembly2gene.pl -g gene/*fasta -a genome/*
-
+## run like ./fromAssembly2gene.pl -g gene/*fasta -a genome/* 
+##debug ./fromAssembly2gene.pl -a test_assembly/*fasta -g test_genes/AA/*fasta -o test1_AA -c 1 -p -t prot
+##debug ./fromAssembly2gene.pl -a test_assembly/*fasta -g test_genes/NT/*fasta -o test1_NT -c 1 -p 
+#######################################################################################################################################################################################################################################################################################################################################################################
+#global variables
 my $start = time;
-
-
 my @seq=();
 my @genes=();
 my $out=();
@@ -60,10 +29,11 @@ my $Esch;
 my $Ent;
 my $percentage;
 my $plasmid;
-my $species;
+my $plasmid_pred;
 my $genes_type;
-
-
+my $gene_out_alignment_fasta=();
+#######################################################################################################################################################################################################################################################################################################################################################################
+#arg options
 
 GetOptions(
     'assemblies|a=s{,}' => \@seq,
@@ -71,13 +41,13 @@ GetOptions(
     'out|o=s' =>\$out,
     'cores|c=s' =>\$cores,
     'percentage|i=s' =>\$percentage,
-     'plasmid|p' =>\$plasmid,
-     'genestype|t=s' =>\$genes_type,
-     'version|v' =>\$version,
-      'help|h' =>\$help,
-
+    'plasmid|p' =>\$plasmid,
+    'genestype|t=s' =>\$genes_type,
+    'version|v' =>\$version,
+    'help|h' =>\$help,
     );
 
+# check flags 
 
 if ($help){
 &usage();
@@ -105,10 +75,11 @@ exit(1);
 
 if (!$out){
 &usage();
- print STDERR "\nERROR: No output prefix given.This is obligatory option\n\n";
+ print STDERR "\nERROR: No output prefix given. This is required\n\n";
  exit(1); 
  }
 
+# defaults
 
 if (!$cores){
 $cores=4;
@@ -125,6 +96,14 @@ if ($genes_type eq "protein"){
 $genes_type='prot';
  }
 
+if (defined $plasmid ){
+	if($plasmid){ $plasmid_pred="SI"};
+}else{ 
+$plasmid_pred="NO";
+}
+
+
+# help 
 
 sub usage{
  print STDERR <<EOF;
@@ -164,35 +143,30 @@ NOTE 6: If you are completely SURE you dont have plasmids in your assemblies you
 EOF
 }
 
-  my $rel_path_genes = $genes[0];
-  my $abs_path_genes= File::Spec->rel2abs( $rel_path_genes ) ;
-  my $dir_genes=dirname($abs_path_genes);
-  my $rel_path_genomes = $seq[0];
-  my $abs_path_genomes= File::Spec->rel2abs( $rel_path_genomes ) ;
-  my $dir_genomes=dirname($abs_path_genomes);
+#######################################################################################################################################################################################################################################################################################################################################################################
 
-my $cmd_fai="rm $dir_genomes/*fai";
-#print $cmd_fai;
-system($cmd_fai);
+# directories paths
 
+ #input folders
+ my $rel_path_genes = $genes[0];
+ my $abs_path_genes= File::Spec->rel2abs( $rel_path_genes ) ;
+ my $dir_genes=dirname($abs_path_genes);
+ my $rel_path_genomes = $seq[0];
+ my $abs_path_genomes= File::Spec->rel2abs( $rel_path_genomes ) ;
+ my $dir_genomes=dirname($abs_path_genomes);
 
-@seq = grep ! /fai$/, @seq;
-#print Dumper @seq;
+ #output folders
+ my $dir= getcwd();
+ my $output_folder=$out."_output";
+ my $results_folder=$out."_results";
+ my $diroutput= $dir."/".$output_folder;
+ my $dirresults= $dir."/".$results_folder;
+ my $dirresultspep= $dirresults."/Peptides";
+ my $dirModifiedGenes= $diroutput."/ModifiedGenes";
+ my $dirModifiedGenomes= $diroutput."/ModifiedGenomes";
+ my $dirscript= $dirresults."/scripts";
 
-
-
-my $output_folder=$out."_output";
-my $results_folder=$out."_results";
-
-my $dir= getcwd();
-my $diroutput= $dir."/".$output_folder;
-my $dirresults= $dir."/".$results_folder;
-my $dirresultspep= $dir."/".$results_folder."/Peptides";
-
-
-#foreach my $files(@genes){ copy($files,$diroriginalgenes)}
-
-
+# check the folders dont exists
 if (-d $output_folder) {
 die "ERROR: $output_folder folder Exists! Please rename or delete folder called: $output_folder";
 }
@@ -209,984 +183,491 @@ if (! -d $dir_genomes) {
 die "ERROR: $dir_genomes older Does NOT Exist! Please direct the program to the right folder path";
 }
 
+# create ouput folders
 
-
-system("mkdir $output_folder");
-system("mkdir $results_folder");
+system("mkdir $diroutput");
+system("mkdir $dirresults");
 system("mkdir $dirresultspep");
-system("mkdir $results_folder/scripts");
-
-my $diroriginalgenes= $diroutput."/originalGenes";
-system("mkdir $diroriginalgenes");
+system("mkdir $dirscript");
+system("mkdir $dirModifiedGenes");
+system("mkdir $dirModifiedGenomes");
 
 print "
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
 
 print "folder for intermedia files: $output_folder\n";
 print "folder for results files: $results_folder\n";
-print "folder for results files: originalGenes\n";
-
-
-#delete especial characters from windows
-
-if (defined $plasmid ){
-	if($plasmid){ $species="SI"};
-}else{ 
-$species="NO";
-}
-
-
-my $diroriginalgenomes= $diroutput."/originalGenomes";
-
-system("mkdir $diroriginalgenomes");
-print "folder for results files: originalGenomes\n";
+print "folder for modified inputs files: ModifiedGenes\n";
+print "folder for modified inputs files: ModifiedGenomes\n";
 print "
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\n";
 
-foreach my $files(@seq){ copy($files,$diroriginalgenomes)}
-
-print "\n\nPLEASE NOTE: Copies of the original files are stored in *output/Originals folders and some format modification are going to be performed on them.\n\n";
-
-
-     my $out_alignment_description=$dirresults."/out.alignments.description.txt";
-	open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
-	print OUT "Gene\tRef\tRef_length_nt\tRef_length_AA\tRef_stopCodon\tGenomeFile\tQuery\tStart\tEnd\tStrand\tQuery_length_nt\tQuery_length_AA\tnt_gaps\tstopCodon\tSNPs\tGAPs\tINSERTION\tlocation\tclassification\tPercentageSimilarityAA\tPercentageSimilarityDNA\tN.copies\n";
-	close OUT;
+print "
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
+print "\n\nPLEASE NOTE: Copies of the original files are stored in *output/Modified.. folders and some format modification are going to be performed on them.\n\n";
+print "
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
 
 
-my $gene_out_alignment_nt_fasta=();
-
-sub subgene{
-
-my $genes = shift;
-
-unless (-e $genes | -s $genes){ die "ERROR: $genes is empty or doesn't exist";}
-
-my $typefile=`file $genes`;
-my $cmd_gene;
-my $linegene=$genes."tmp";
+#######################################################################################################################################################################################################################################################################################################################################################################
+#functions
 
 
-#print "\n\n>>>>>>>> $typefile\n\n";
-
-if ( $typefile=~m/CRLF/g){
-				my $cmd_gene="awk '/^>/{gsub(\"\\r\",\"\\n\");printf(\"\%s\",\$0);next; }{gsub(\"\\r\",\"\");printf(\"\%s\",\$0);}  END {printf(\"\");} ' < $genes >$linegene";
-						system($cmd_gene);
-						#print $cmd_gene;
-					}elsif( $typefile=~m/CR/g){
-					    my $cmd_gene="awk '/^>/{gsub(\"\\r\",\"\\n\");printf(\"\%s\",\$0);next;}{gsub(\"\\\$\",\"\");printf(\"\%s\",\$0);}  END {printf(\"\");} ' < $genes | awk '/^>/{printf(\"\%s\\n\",\$0);next; }{printf(\"\%s\",\$0);}  END {printf(\"\");}'  >$linegene";
-						system($cmd_gene);
-						#print $cmd_gene;
-						}else{ 
-					    my $cmd_gene="awk '/^>/{printf(\"\%s\\n\",\$0);next; }{printf(\"\%s\",\$0);}  END {printf(\"\");} ' < $genes >$linegene";
-						system($cmd_gene);
-						#print $cmd_gene;
-						}
-						
-	
-	my $lastcodon=`grep -o '..[^ ]\$' $linegene|tail -1`;
-	chomp($lastcodon);
-   	$lastcodon =~ s/(.*?)\s?[\n?|\r?]/$1/;
-   #	print "\n\n>>$lastcodon<<";
-   	
-   	my $dec;
-   	my @array=("TAG","TAA","TGA","tag","taa","tga");
-   	
-   	
-   	my %params = map { $_ => 1 } @array;
-
-
-	if(exists($params{$lastcodon}) | $genes_type eq 'prot') { system("echo '\n' >> $linegene")}elsif ( $genes_type eq 'nucl'){system("echo 'TAG\n' >> $linegene")} 
-
-   	my $gene_tag=basename($genes);
+sub sub1_genemodification{
+	my $genes_name = shift;
+	my $genes=$dirModifiedGenes."/".$genes_name;
+	#print "$genes\n\n";
+	unless (-e $genes | -s $genes){ die "ERROR: $genes file is empty or doesn't exist";}
+	#check what type of file is input (different OS)
+	my $typefile=`file $genes`;
+	my $cmd_gene;
+	my $linegene=$genes."tmp";
+	if ( $typefile=~m/: ASCII*+CRLF/g){
+		my $cmd_gene="awk '/^>/{gsub(\"\\r\",\"\\n\");printf(\"\%s\",\$0);next; }{gsub(\"\\r\",\"\");printf(\"\%s\",\$0);}  END {printf(\"\\n\");} ' < $genes | awk '/^>/{printf(\"\\n\%s\\n\",\$0);next; }{printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' >$linegene";
+		print "------CRLF $cmd_gene-------\n\n";
+		system($cmd_gene);
+		}elsif($typefile=~m/: ASCII*+CR/g){
+		my $cmd_gene="awk '/^>/{gsub(\"\\r\",\"\\n\");printf(\"\%s\",\$0);next;}{gsub(\"\$\",\"\");printf(\"\%s\",\$0);}  END {printf(\"\\n\");} ' < $genes | awk '/^>/{printf(\"\\n\%s\\n\",\$0);next; }{printf(\"\%s\",\$0);}  END {printf(\"\\n\");}'  >$linegene";
+		print "------CR $cmd_gene-------\n\n";
+		system($cmd_gene);
+		}else{ 
+			my $cmd_gene="awk '/^>/{printf(\"\\n\%s\\n\",\$0);next; }{printf(\"\%s\",\$0);}  END {printf(\"\\n\");} ' < $genes >$linegene";
+			print "------ELSE $cmd_gene-------\n\n";
+			system($cmd_gene);
+			}
+	#check if gene is in nucleotide or in aminoacid
+	# add last codon
+	if( $genes_type eq "nucl"){
+		my $cmd_grep=`grep -o ^M $linegene`;
+		#print "\n---$cmd_grep---\n\n";
+		if($cmd_grep ne ""){ die  print "ERROR: Gene $genes looks like an aminoacid sequence. The input genes are considered nucleotide sequences by default. please set -t 'protein' if your sequences are aminoacids. Do not mix sequences types" }
+		my $lastcodon=`grep -o '..[^ ]\$' $linegene|tail -1`;
+		chomp($lastcodon);
+		$lastcodon =~ s/(.*?)\s?[\n?|\r?]/$1/;
+		my $dec;
+		my @array=("TAG","TAA","TGA","tag","taa","tga");
+		my %params = map { $_ => 1 } @array;
+		if(exists($params{$lastcodon}) | $genes_type eq 'prot') { system("echo '\n' >> $linegene")}elsif ( $genes_type eq 'nucl'){system("echo 'TAG\n' >> $linegene")} 
+	}
+	system("mv $linegene $genes");
+	my $gene_tag=$genes_name;
    	$gene_tag=~s/.fasta$//g;
- 		
-	$gene_out_alignment_nt_fasta=$dirresults."/".$gene_tag.".nt_alignment.fasta";
-	open OUT1, ">$gene_out_alignment_nt_fasta" or die "Cannot open $gene_out_alignment_nt_fasta for writing\n";
-	#sed 's/.*\(...\)/\1/'
+	$gene_out_alignment_fasta=$dirresults."/".$gene_tag."_alignment.fasta";
+	system("cat $genes >$gene_out_alignment_fasta.tmp");
+	#print "\n\n after processing $genes\n\n";
+	unless (-e $genes | -s $genes){ die "ERROR: something went wrong while reformating $genes please check file";}
+   	}
 
-	system("cat $linegene  >$gene_out_alignment_nt_fasta.tmp");
-	close OUT1;
-	
-
-	my $genenew=basename($genes);
-	system("mv $linegene $diroutput/originalGenes/$genenew");
-
+#was within subgene
+sub sub2_gene_makeblastdb{
+	my $genes_name = shift;
+	my $genes=$dirModifiedGenes."/".$genes_name;
+	#print "$genes\n\n";
+   	my $gene_tag=$dirModifiedGenes."/".$genes_name;
+   	$gene_tag=~s/.fasta$//g;
 	print "\t\tRunning makeblastdb on $genes\n";
-	my $gene_location=$diroutput."/originalGenes/".$genenew;
- 	my $gene_name=$gene_location;
-	$gene_name=~s/.fasta//g;
- 	my $cmd_makeblastdb= "makeblastdb -in ".$gene_location." -dbtype ".$genes_type." -out ".$gene_name."\n";
+ 	my $cmd_makeblastdb= "makeblastdb -in ".$genes." -dbtype ".$genes_type." -out ".$gene_tag;
   	print "You are asking to run\n $cmd_makeblastdb\n";
-  
   	system($cmd_makeblastdb);
-  	
-
- 
+	if($genes_type eq "prot"){ 
+		my $db_blast=$gene_tag.".pin";
+		unless (-e $db_blast | -s $db_blast){ die "ERROR: something went wrong while running makeblastdb $genes please check file";}
+	}
+	if($genes_type eq "nucl"){ 
+		my $db_blast=$gene_tag.".nin";
+		unless (-e $db_blast | -s $db_blast){ die "ERROR: something went wrong while running makeblastdb $genes please check file";}
+	}
 }
 
-
-
-
-sub sub0{
-my $seq = shift;
-my $genome=basename($seq);
-my $dirproplas=$diroutput."/".$genome.".plasmid";
-my $cmd_prod_plasmid="mkdir $dirproplas";
-system("$cmd_prod_plasmid");	
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my $cmd_prod_chr="mkdir $dirprochr";
-system("$cmd_prod_chr");
-
-my $plaspred=$diroutput."/".$genome."_plas.prob.out";
-
-
-#print "Rscript plasmid_chromosome_Detection.r $seq  $dirprochr $dirproplas \"$species\" --slave\n";
-		system("classify_fasta.py -f  $seq  -o $plaspred");
-      	
-
+sub sub3_chrplas_folders{
+	my $seq = shift;
+	$seq=$dirModifiedGenomes."/".$seq;
+	my $genome=basename($seq);	
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $fasta_chr=$dirprochr."/".$genome.".chromosome.fasta";
+	my $diralignments=$dirprochr."/alignments";
+	my $cmd_prod_chr="mkdir $dirprochr";
+	my $cmd_blast_chr="mkdir $diralignments";
+	system("$cmd_prod_chr");
+	system("$cmd_blast_chr");
+	if($plasmid_pred eq "NO"){
+		my $cmd_cp="cp $seq $fasta_chr";
+		system($cmd_cp);
+		}
+	if($plasmid_pred eq "SI"){
+		my $dirproplas=$diroutput."/".$genome.".plasmid";
+		my $diralignments=$dirproplas."/alignments";
+		my $cmd_prod_plasmid="mkdir $dirproplas";
+		my $cmd_blast_plasmid="mkdir $diralignments";
+		system("$cmd_prod_plasmid");
+		system("$cmd_blast_plasmid");
+	}
  }
  
 
-sub sub1{
-my $seq = shift;
-my $genome=basename($seq);
-my $dirproplas=$diroutput."/".$genome.".plasmid";
-my $cmd_prod_plasmid="mkdir $dirproplas";
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my $cmd_prod_chr="mkdir $dirprochr";
-
-my $plaspred=$diroutput."/".$genome."_plas.prob.out";
-      	
-      	system("Rscript $results_folder/scripts/plasmid_chromosome_Detection.r $plaspred $dirprochr $dirproplas --slave");
- 		#print "done with $seq";
+#was sub 0
+sub sub4_plasclass_method{
+	my $seq = shift;
+	$seq=$dirModifiedGenomes."/".$seq;
+	my $genome=basename($seq);
+	my $dirproplas=$diroutput."/".$genome.".plasmid";	
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $plaspred=$diroutput."/".$genome."_plas.prob.out";
+	system("classify_fasta.py -f $seq -o $plaspred");
  }
  
- 
- 
- 
- sub sub2{
-my $seq = shift;
-my $genome=basename($seq);
-
-my $dirproplas=$diroutput."/".$genome.".plasmid";	
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
-my $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
-my $output_plasmid=$input_plasmid;
-my $output_chr=$input_chr;
-	
-	$output_plasmid=~s/_contigslist.txt/.fasta/g;
-	$output_chr=~s/_contigslist.txt/.fasta/g;
-
-	#print "      processing    $output_plasmid \n";	
-	#print "      processing    $output_chr \n";
-
-if(-s $input_plasmid){
-#print "enter Plasmid \n";
-	my $temp_plasmid=$output_plasmid.".tmp";
-	my $temp_plasmid_1=$output_plasmid.".tmp1";
-    my $cmd_cut="cut -d \" \" -f1 $input_plasmid >$temp_plasmid";
-    system($cmd_cut);
-	system("xargs samtools faidx $seq< $temp_plasmid > $temp_plasmid_1");
-	my $cmd_awk="awk '/^>/{gsub(\" \",\"_\"); \$0=\$0\"\\:$genome"."_plasmid\"}1' $temp_plasmid_1 >$output_plasmid";
-	#my $cmd_awk="awk '/^>/{\$0=\$0\"\\:$genome"."_plasm\"}1' $temp_plasmid_1 >$output_plasmid";
-	#print ">>>>>>$cmd_awk\n\n";
-	system($cmd_awk);
-	system( "rm $temp_plasmid");
-	system( "rm $temp_plasmid_1");
-	}
-	
-if( -s $input_chr){
-#print "enter chromosome \n";
-	my $temp_chr=$output_chr.".tmp";
-	my $temp_chr_1=$output_chr.".tmp1";
-    my $cmd_cut1="cut -d \" \" -f1 $input_chr >$temp_chr";
-	system($cmd_cut1);
-	system("xargs samtools faidx $seq< $temp_chr > $temp_chr_1");
-	my $cmd_awk1="awk '/^>/{gsub(\" \",\"_\"); \$0=\$0\"\\:$genome"."_chr\"}1' $temp_chr_1 >$output_chr";
-	#my $cmd_awk1="awk '/^>/{\$0=\$0\"\\:$genome"."_chr\"}1' $temp_chr_1 >$output_chr";	
-#	print ">>>>>$cmd_awk1\n\n";
-	system($cmd_awk1);
-	system( "rm $temp_chr");
-	system( "rm $temp_chr_1");
-
-	}
-	
-
-}
+sub sub5_plasmid_extraction{
+	my $seq = shift;
+	$seq=$dirModifiedGenomes."/".$seq;
+	my $genome=basename($seq);
+	my $dirproplas=$diroutput."/".$genome.".plasmid";	
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $plaspred=$diroutput."/".$genome."_plas.prob.out";
+    system("Rscript $results_folder/scripts/plasmid_chromosome_Detection.r $plaspred $dirprochr $dirproplas --slave");
+ }
 
 
-sub sub3{
-my $seq = shift;
-my $genome=basename($seq);
-my $dirproplas=$diroutput."/".$genome.".plasmid";
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my  $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
-my  $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
-my $output_plasmid=$input_plasmid;
-my $output_chr=$input_chr;
-	$output_plasmid=~s/_contigslist.txt/.fasta/g;
-	$output_chr=~s/_contigslist.txt/.fasta/g;
-
-my $name_output_plasmid=$output_plasmid;
- $name_output_plasmid=~s/.fasta$//;
-
-my $name_output_chr=$output_chr;
- $name_output_chr=~s/.fasta$//;
-
-if(-s $output_plasmid){
-
-my $genes_gff= $dirproplas."/".$genome.".plasmid.genes.gff";
-my $genes_gfftmp= $dirproplas."/".$genome.".plasmid.genes.gfftmp";
-my $genes_faa= $dirproplas."/".$genome.".plasmid.genes.faa";
-my $genes_fasta= $dirproplas."/".$genome.".plasmid.genes.fasta";
-my $temp=$genes_fasta.".tmp";
-
-#print "\n\n\nprodigal -i $output_plasmid -o $gene_gbk -a $genes_faa -d $genes_fasta\n\n\n";
-system("prodigal -i $output_plasmid -o $genes_gfftmp -a $genes_faa -d $genes_fasta -f gff -q -p meta");
-system("\(cat $genes_gfftmp; echo '##FASTA'; cat $output_plasmid\) >$genes_gff");              
-system("rm $genes_gfftmp");       
-}
-
-if(-s $output_chr ){
-
-my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
-my $genes_gff1tmp=$dirprochr."/".$genome.".chr.genes.gfftmp";
-my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
-my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
-my $temp1=$genes_fasta1.".tmp";
-
-#print "\n\n\nprodigal -i $output_chr -o $gene_gbk1 -a $genes_faa1 -d $genes_fasta1\n\n\n";
-#system("prodigal -i $output_chr -o $gene_gbk1 -a $genes_faa1 -d $genes_fasta1 -p meta -q");
-system("prodigal -i $output_chr -o $genes_gff1tmp -a $genes_faa1 -d $genes_fasta1 -f gff -q  -p meta");
-system("\(cat $genes_gff1tmp; echo '##FASTA'; cat  $output_chr\) >$genes_gff1");              
-system("rm $genes_gff1tmp");    
-
-	}
-}
-
-
-
-sub sub4{
-my $seq = shift;
-my $genome=basename($seq);
-my $dirproplas=$diroutput."/".$genome.".plasmid";
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-
- my  $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
- my  $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
- 
-
+sub var_inputs{
+	my $seq = shift;
+	$seq=$dirModifiedGenomes."/".$seq;
+    my $genome=basename($seq);
+	my $dirproplas=$diroutput."/".$genome.".plasmid";	
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
+	my $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
 	my $output_plasmid=$input_plasmid;
-    my $output_chr=$input_chr;
-	
+	my $output_chr=$input_chr;
+	my $output_alignments_chr=$dirprochr."/alignments";
+	my $output_alignments_plas=$dirproplas."/alignments";
 	$output_plasmid=~s/_contigslist.txt/.fasta/g;
 	$output_chr=~s/_contigslist.txt/.fasta/g;
-
-
-my $name_output_plasmid=$output_plasmid;
- $name_output_plasmid=~s/.fasta$//;
-
-my $name_output_chr=$output_chr;
- $name_output_chr=~s/.fasta$//;
-
-
-my $genes_gff= $dirproplas."/".$genome.".plasmid.genes.gff";
-my $genes_faa= $dirproplas."/".$genome.".plasmid.genes.faa";
-my $genes_fasta= $dirproplas."/".$genome.".plasmid.genes.fasta";
-my $temp=$genes_fasta.".tmp";
-my $temp_1=$genes_faa.".tmp";
-
-if(-s $genes_fasta){
-system("cp $genes_fasta $temp");
-my $cmd="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp  > $genes_fasta";
-system( $cmd);
-system("sed 's/ # /###/g' $genes_fasta >$temp");
-system("mv $temp $genes_fasta");
-
-system("cp $genes_faa $temp_1");
-my $cmd_prt="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp_1  > $genes_faa";
-system( $cmd_prt);
-system("sed 's/ # /###/g' $genes_faa >$temp_1");
-system("mv $temp_1 $genes_faa");
-
-
+	my $name_output_plasmid=$output_plasmid;
+ 	$name_output_plasmid=~s/.fasta$//;
+	my $name_output_chr=$output_chr;
+ 	$name_output_chr=~s/.fasta$//;
+	return ($dirproplas, $dirprochr,$input_plasmid,$input_chr,$output_plasmid,$output_chr,$name_output_plasmid,$name_output_chr,$output_alignments_chr,$output_alignments_plas);
 }
-
-my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
-my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
-my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
-my $temp1=$genes_fasta1.".tmp";
-my $temp1_1=$genes_faa1.".tmp";
-
-
-if(-s $genes_fasta1){
-system("cp $genes_fasta1 $temp1");
-my $cmd1="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp1  > $genes_fasta1";
-#print $cmd1."\n";
-system( $cmd1);
-system("sed 's/ # /###/g' $genes_fasta1 >$temp1");
-system("mv $temp1 $genes_fasta1");
-
-
-system("cp $genes_faa1 $temp1_1");
-my $cmd_prt1="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp1_1  > $genes_faa1";
-system( $cmd_prt1);
-system("sed 's/ # /###/g' $genes_faa1 >$temp1_1");
-system("mv $temp1_1 $genes_faa1");
-}
-}
-
-
-sub sub5{
-my $seq = shift;
-my $genome=basename($seq);
-my $dirproplas=$diroutput."/".$genome.".plasmid";	
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
-my $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
-my $output_plasmid=$input_plasmid;
-my $output_chr=$input_chr;
-	$output_plasmid=~s/_contigslist.txt/.fasta/g;
-	$output_chr=~s/_contigslist.txt/.fasta/g;
-	 
-
-my $name_output_plasmid=$output_plasmid;
- $name_output_plasmid=~s/.fasta$//;
-
-my $name_output_chr=$output_chr;
- $name_output_chr=~s/.fasta$//;
-
-
-my $genes_gff= $dirproplas."/".$genome.".plasmid.genes.gff";
-my $genes_faa= $dirproplas."/".$genome.".plasmid.genes.faa";
-my $genes_fasta= $dirproplas."/".$genome.".plasmid.genes.fasta";
-my $temp=$genes_fasta.".tmp";
-
-my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
-my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
-my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
-my $temp1=$genes_fasta1.".tmp";
-
-	foreach my $gene(@genes){
-	
-	my $genename=basename($gene);
-	my $gene_id=$diroriginalgenes."/".$genename;
-	$gene_id=~s/.fasta$//g;
-	
-	my $gene_tag=basename($gene);
-	$gene_tag=~s/.fasta$//g;
-	
-	
-	my $outputblast= $name_output_plasmid.".".$gene_tag.".Blast.txt";
-	my $outputblast1= $name_output_chr.".".$gene_tag.".Blast.txt";
-	
-	my $tempblast=$outputblast.".tmp";
-	my $tempblast1=$outputblast1.".tmp";
-	
-if ($genes_type eq"nucl"){	
-	if(-s $genes_fasta){
-	my $cmd_blast="blastn -query $genes_fasta -db $gene_id -dust no -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send mismatch gapope evalue bitscore\" -perc_identity $percentage -out $outputblast";
-
-#print "$cmd_blast\n";
-	  system ($cmd_blast);
-
-		
-	  }
-	  
-	if(-s $genes_fasta1){
-	my $cmd_blast1="blastn -query $genes_fasta1 -db $gene_id -dust no -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send mismatch gapope evalue bitscore\" -perc_identity $percentage -out $outputblast1";
-#print "$cmd_blast1\n";
-	system ($cmd_blast1);
-	
-	}
-}elsif ($genes_type eq "prot"){
-
-	if(-s $genes_fasta){
-	my $cmd_blast="blastp -query $genes_faa -db $gene_id  -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send evalue bitscore qcovs qcovhsp scovhsp\"  -out $outputblast";
-#print "$cmd_blast\n";
-	  system ($cmd_blast);
-	  
-	  my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast >$tempblast";
-		system ($cmd_highper);
-		system (" mv $tempblast $outputblast")
-		
-	  }
-	  
-	if(-s $genes_fasta1){
-	my $cmd_blast1="blastp -query $genes_faa1 -db $gene_id -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send evalue bitscore qcovs qcovhsp scovhsp\"  -out $outputblast1";
-#print "$cmd_blast1\n";
-	system ($cmd_blast1);
-	my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast1";
-		system ($cmd_highper);
-		system (" mv $tempblast1 $outputblast1");
-			}
-		}
-	}
-}
-
-
-
-sub sub5_1{
-my $seq = shift;
-my $genome=basename($seq);
-my $dirproplas=$diroutput."/".$genome.".plasmid";	
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
-my $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
-my $output_plasmid=$input_plasmid;
-my $output_chr=$input_chr;
-	$output_plasmid=~s/_contigslist.txt/.fasta/g;
-	$output_chr=~s/_contigslist.txt/.fasta/g;
-	 
-
-my $name_output_plasmid=$output_plasmid;
- $name_output_plasmid=~s/.fasta$//;
-
-my $name_output_chr=$output_chr;
- $name_output_chr=~s/.fasta$//;
-
-
-my $genes_gff= $dirproplas."/".$genome.".plasmid.genes.gff";
-my $genes_faa= $dirproplas."/".$genome.".plasmid.genes.faa";
-my $genes_fasta= $dirproplas."/".$genome.".plasmid.genes.fasta";
-my $temp=$genes_fasta.".tmp";
-
-my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
-my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
-my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
-my $temp1=$genes_fasta1.".tmp";
-
-	foreach my $gene(@genes){
-	
-	my $genename=basename($gene);
-	my $gene_id=$diroriginalgenes."/".$genename;
-	$gene_id=~s/.fasta$//g;
-	
-	my $gene_tag=basename($gene);
-	$gene_tag=~s/.fasta$//g;
-	
-	
-	my $outputblast= $name_output_plasmid.".".$gene_tag.".Blast.txt";
-	my $outputblast1= $name_output_chr.".".$gene_tag.".Blast.txt";
-	
-	my $tempblast=$outputblast.".tmp";
-	my $tempblast1=$outputblast1.".tmp";
-	
-if ($genes_type eq"nucl"){	
-	if(-s $genes_fasta){
-
-	  my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast >$tempblast";
-		system ($cmd_highper);
-		system (" mv $tempblast $outputblast")
-		
-	  }
-	  
-	if(-s $genes_fasta1){
-
-	my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast1";
-		system ($cmd_highper);
-		system (" mv $tempblast1 $outputblast1");
-		
-	}
-}elsif ($genes_type eq "prot"){
-
-	if(-s $genes_fasta){
-	  
-	  my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast >$tempblast";
-		system ($cmd_highper);
-		system (" mv $tempblast $outputblast")
-		
-	  }
-	  
-	if(-s $genes_fasta1){
-
-	my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast1";
-		system ($cmd_highper);
-		system (" mv $tempblast1 $outputblast1");
-		
-			}
-		}
-	}
-}
-
-
-
-
-sub sub6{
-my $seq = shift;
-my $genome=basename($seq);
-my $dirproplas=$diroutput."/".$genome.".plasmid";	
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
-my $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
-my $output_plasmid=$input_plasmid;
-my $output_chr=$input_chr;
-	$output_plasmid=~s/_contigslist.txt/.fasta/g;
-	$output_chr=~s/_contigslist.txt/.fasta/g;
-	 
-
-my $name_output_plasmid=$output_plasmid;
- $name_output_plasmid=~s/.fasta$//;
-
-my $name_output_chr=$output_chr;
- $name_output_chr=~s/.fasta$//;
-
-
-my $genes_gff= $dirproplas."/".$genome.".plasmid.genes.gff";
-my $genes_faa= $dirproplas."/".$genome.".plasmid.genes.faa";
-my $genes_fasta= $dirproplas."/".$genome.".plasmid.genes.fasta";
-my $temp=$genes_fasta.".tmp";
-
-my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
-my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
-my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
-my $temp1=$genes_fasta1.".tmp";
-
-	foreach my $gene(@genes){
-	
-	my $genename=basename($gene);
-	my $gene_id=$diroriginalgenes."/".$genename;
-	$gene_id=~s/.fasta$//g;
-	
-	my $gene_tag=basename($gene);
-	$gene_tag=~s/.fasta$//g;
-	
-
-	my $outputblast= $name_output_plasmid.".".$gene_tag.".Blast.txt";
-	my $outputblast1= $name_output_chr.".".$gene_tag.".Blast.txt";
-	
-	my $gene_ref=$gene_id.".fasta";
-
-if(-s $outputblast){
- my $temp_plasmid=$name_output_plasmid.".".$gene_tag.".tmp";
-	system("cut -f 1 $outputblast >$temp_plasmid");
-	my $output_gene= $name_output_plasmid.".".$gene_tag.".fasta";
-
-
-if( $genes_type eq 'nucl'){
-	system("xargs samtools faidx $genes_fasta< $temp_plasmid >$output_gene");
-}elsif($genes_type eq 'prot'){
-system("xargs samtools faidx $genes_faa< $temp_plasmid >$output_gene");}
-
-	system("rm $temp_plasmid");
-	my $output_ref_plasmid=$output_gene.".plusRef.fasta";
-	system("cat $gene_ref $output_gene >$output_ref_plasmid");
-
-my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".plasmid.out.alignments.description";
-	open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
-
-my $gene_genome_plas_out_alignment_AA_fasta=$dirresultspep."/".$gene_tag."_".$genome.".plasm.AAsequence.fasta";
-		open OUT1, ">$gene_genome_plas_out_alignment_AA_fasta" or die "Cannot open $gene_genome_plas_out_alignment_AA_fasta for writing\n";
-
-my $gene_genome_plas_out_alignment_nt_fasta=$dirresults."/".$gene_tag."_".$genome.".plasm.nt_alignment.fasta.tmp";
-		open OUT2, ">$gene_genome_plas_out_alignment_nt_fasta" or die "Cannot open  $gene_genome_plas_out_alignment_nt_fasta for writing\n";
-
-	
-		#print "Rscript curatingAlignments.r $output_ref_plasmid $gene_tag $gene_genome_plas_out_alignment_nt_fasta $gene_genome_plas_out_alignment_AA_fasta $out_alignment_description --slave\n\n";
-
-  		system(" Rscript $results_folder/scripts/curatingAlignments.r $output_ref_plasmid $gene_tag $gene_genome_plas_out_alignment_nt_fasta $gene_genome_plas_out_alignment_AA_fasta $out_alignment_description --slave");
-
-}else { 
- my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".plasmid.out.alignments.description";
-	open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
-
-	my $firstline_Ref=`grep ">" $gene_id.fasta`;
-	chomp($firstline_Ref);
-	$firstline_Ref=~s/[\n\r]//g;
-	$firstline_Ref=~s/>//g;
-	print OUT "$genename\t\"$firstline_Ref\"\tNA\tNA\tNA\t\"$genome\"\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tplasmid\tabsent\t0\t0\t0\n";
-	close OUT;
- }
-
-if(-s $outputblast1){
-my $temp_chr=$name_output_chr.".".$gene_tag.".tmp";
-	system("cut -f 1 $outputblast1 >$temp_chr");
-	my $output_gene1= $name_output_chr.".".$gene_tag.".fasta";
-	
-if( $genes_type eq 'nucl'){
-	system("xargs samtools faidx $genes_fasta1< $temp_chr >$output_gene1");
-}elsif($genes_type eq 'prot'){
-system("xargs samtools faidx $genes_faa1< $temp_chr >$output_gene1");}
-	
-	system("rm $temp_chr");
-	my $output_ref_chr=$output_gene1.".plusRef.fasta";
-	system("cat $gene_ref $output_gene1 >$output_ref_chr");
-
-my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".chr.out.alignments.description";
-	open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
-
-my $gene_genome_chr_out_alignment_AA_fasta=$dirresultspep."/".$gene_tag."_".$genome.".chr.AAsequence.fasta";
-		open OUT1, ">$gene_genome_chr_out_alignment_AA_fasta" or die "Cannot open $gene_genome_chr_out_alignment_AA_fasta for writing\n";
-
-my $gene_genome_chr_out_alignment_nt_fasta=$dirresults."/".$gene_tag."_".$genome.".chr.nt_alignment.fasta.tmp";
-		open OUT2, ">$gene_genome_chr_out_alignment_nt_fasta" or die "Cannot open  $gene_genome_chr_out_alignment_nt_fasta for writing\n";
-	  	
-	  	#print " Rscript curatingAlignments.r  $output_ref_chr $gene_tag $gene_genome_chr_out_alignment_nt_fasta $gene_genome_chr_out_alignment_AA_fasta $out_alignment_description --slave\n\n";
-
-  		system(" Rscript $results_folder/scripts/curatingAlignments.r  $output_ref_chr $gene_tag $gene_genome_chr_out_alignment_nt_fasta $gene_genome_chr_out_alignment_AA_fasta $out_alignment_description --slave");
-
-		}else { 
- my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".chr.out.alignments.description";
-	open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
-	
-
-	my $firstline_Ref=`grep ">" $gene_id.fasta`;
-	chomp($firstline_Ref);
-		$firstline_Ref=~s/[\n\r]//g;
-		$firstline_Ref=~s/>//g;
-	print OUT "$genename\t\"$firstline_Ref\"\tNA\tNA\tNA\t\"$genome\"\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tchromosome\tabsent\t0\t0\t0\n";
-	close OUT;
-	 }
-	}
-
-}
-
-
-
-
-##############################  No Plasmid #######################################
-
-
-sub sub1_chr{
-
-my $seq = shift;
-my $genome=basename($seq);
-	
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my $cmd_prod_chr="mkdir $dirprochr";
-system("$cmd_prod_chr");
-
- }
  
-sub sub2_chr{
-my $seq = shift;
-$seq=$diroriginalgenomes."/".$seq;
-my $genome=basename($seq);
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-
-my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
-my $genes_gff1tmp=$dirprochr."/".$genome.".chr.genes.gfftmp";
-my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
-my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
-my $temp1=$genes_fasta1.".tmp";
-
-#print "\n\n\nprodigal -i $output_chr -o $gene_gbk1 -a $genes_faa1 -d $genes_fasta1\n\n\n";
-#system("prodigal -i $output_chr -o $gene_gbk1 -a $genes_faa1 -d $genes_fasta1 -p meta -q");
-system("prodigal -i $seq -o $genes_gff1tmp -a $genes_faa1 -d $genes_fasta1 -f gff -q  -p meta");
-system("\(cat $genes_gff1tmp; echo '##FASTA'; cat  $seq\) >$genes_gff1");              
-system("rm $genes_gff1tmp");    
-
-}
-
-
-sub sub3_chr{
-my $seq = shift;
-my $genome=basename($seq);
-$seq=$diroriginalgenomes."/".$genome;
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-
-my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
-my $genes_gff1tmp=$dirprochr."/".$genome.".chr.genes.gfftmp";
-my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
-my $genes_faa1tmp=$dirprochr."/".$genome.".chr.genes.faatmp";
-my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
-my $genes_fasta1tmp=$dirprochr."/".$genome.".chr.genes.fastatmp";
-
-	my $cmd_awk1="awk '/^>/{\$0=\$0\"\\:$genome\"}1'  $genes_gff1 > $genes_gff1tmp";
-	my $cmd_awk2="awk '/^>/{\$0=\$0\"\\:$genome\"}1'  $genes_faa1 > $genes_faa1tmp";
-	my $cmd_awk3="awk '/^>/{\$0=\$0\"\\:$genome\"}1'  $genes_fasta1 > $genes_fasta1tmp";
-	
-	#print ">>>>> 1 $cmd_awk\n\n";
-	system($cmd_awk1);
-	system($cmd_awk2);
-	system($cmd_awk3);
-	
-	system("mv $genes_gff1tmp $genes_gff1");
-	system("mv $genes_faa1tmp $genes_faa1");
-	system("mv $genes_fasta1tmp $genes_fasta1");
-	
-}
-
-
-
-
-
-sub sub4_chr{
-my $seq = shift;
-$seq=$diroriginalgenomes."/".$seq;
-my $genome=basename($seq);
-
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
-my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
-my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
-my $temp1=$genes_fasta1.".tmp";
-my $temp2=$genes_faa1.".tmp";
-
-if(-s $genes_fasta1){
-system("cp $genes_fasta1 $temp1");
-my $cmd1="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp1  > $genes_fasta1";
-#print $cmd1."\n";
-system( $cmd1);
-
-system("cp $genes_fasta1 $temp2");
-my $cmd2="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp2  > $genes_faa1";
-#print $cmd1."\n";
-system( $cmd2);
-
-
-system("sed 's/ # /###/g' $genes_fasta1 >$temp1");
-system("mv $temp1 $genes_fasta1");
-
-system("sed 's/ # /###/g' $genes_faa1 >$temp2");
-system("mv $temp2 $genes_faa1");
-}
-}
-
-
-
-sub sub5_chr{
-my $seq = shift;
-$seq=$diroriginalgenomes."/".$seq;
-my $genome=basename($seq);
-
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
-my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
-my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
-my $temp1=$genes_fasta1.".tmp";
-
-
-
-	foreach my $gene(@genes){
-	
-	my $genename=basename($gene);
-	my $gene_id=$diroriginalgenes."/".$genename;
-	$gene_id=~s/.fasta$//g;
-	
-	my $gene_tag=basename($gene);
-	$gene_tag=~s/.fasta$//g;
-	
-	
-my $outputblast1= $dirprochr."/".$genome.".".$gene_tag.".Blast.txt";
-my $tempblast=$outputblast1.".tmp";
-
-	 
-  if ($genes_type eq "nucl"){
-		if(-s $genes_fasta1){
-		my $cmd_blast1="blastn -query $genes_fasta1 -db $gene_id -dust no -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send mismatch gapope evalue bitscore\" -perc_identity $percentage -out $outputblast1";
-		#print "$cmd_blast1\n";
-		system ($cmd_blast1);
+#only needed when plasmid option selected extracts the corresponding contigs
+ sub sub6_samtools{
+	my $genome = shift;
+	my $seq=$dirModifiedGenomes."/".$genome;
+    my ($dirproplas, $dirprochr,$input_plasmid,$input_chr,$output_plasmid,$output_chr,$name_output_plasmid,$name_output_chr) = var_inputs($genome);
+	if( -s $input_chr){
+			my $temp_chr=$output_chr.".tmp";
+			my $temp_chr_1=$output_chr.".tmp1";
+			my $cmd_cut="cut -d \" \" -f1 $input_chr >$temp_chr";
+			my $cmd_awk="xargs samtools faidx $seq< $temp_chr > $temp_chr_1";
+			my $cmd_awk1="awk '/^>/{gsub(\" \",\"_\"); \$0=\$0\":$genome"."_chr\"}1' $temp_chr_1 >$output_chr";
+			#print "\n\n\n$cmd_cut\n\n\n";
+			system($cmd_cut);
+			system($cmd_awk);
+			system($cmd_awk1);
+			system( "rm $temp_chr");
+			system( "rm $temp_chr_1");
+	}
+	if($plasmid_pred eq "SI"){
+		if(-s $input_plasmid){
+			my $temp_plasmid=$output_plasmid.".tmp";
+			my $temp_plasmid_1=$output_plasmid.".tmp1";
+			my $cmd_cut="cut -d \" \" -f1 $input_plasmid >$temp_plasmid";
+			my $cmd_awk="xargs samtools faidx $seq< $temp_plasmid > $temp_plasmid_1";
+			my $cmd_awk1="awk '/^>/{gsub(\" \",\"_\"); \$0=\$0\":$genome"."_plasmid\"}1' $temp_plasmid_1 >$output_plasmid";
+			#print "\n\n\n$cmd_cut\n\n\n";
+			system($cmd_cut);
+			system($cmd_awk);
+			system($cmd_awk1);
+			system("rm $temp_plasmid");
+			system("rm $temp_plasmid_1");
+		}
+	}
 		
-		}
-		#print "\n\n\n\n find $diroutput/*/ -size 0 |  xargs rm \n\n\n\n ";
-		#system("find $diroutput/*/ -size 0 |  xargs rm");
-}elsif ($genes_type eq "prot"){
-	if(-s $genes_fasta1){
-		my $cmd_blast1="blastp -query $genes_faa1 -db $gene_id -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send evalue bitscore qcovs qcovhsp scovhsp\" -out $outputblast1";
-		print "$cmd_blast1\n";
-		system ($cmd_blast1);
-		my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage."  && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast";
-		system ($cmd_highper);
-		system (" mv $tempblast $outputblast1")
-		}
-		#print "\n\n\n\n find $diroutput/*/ -size 0 |  xargs rm \n\n\n\n ";
-		#system("find $diroutput/*/ -size 0 |  xargs rm");
-		}
 		
+}
+ 
+sub sub7_prodigal{
+	my $seq = shift;
+	my $genome=basename($seq);
+    my ($dirproplas, $dirprochr,$input_plasmid,$input_chr,$output_plasmid,$output_chr,$name_output_plasmid,$name_output_chr,$output_alignments_chr,$output_alignments_plas) = var_inputs($genome);
+	if(-s $output_chr ){
+		my $genes_gff_chr=$dirprochr."/".$genome.".chr.genes.gff";
+		my $genes_gff_chrtmp=$dirprochr."/".$genome.".chr.genes.gfftmp";
+		my $genes_faa_chr=$dirprochr."/".$genome.".chr.genes.faa";
+		my $genes_faa_chrtmp=$dirprochr."/".$genome.".chr.genes.faatmp";
+		my $genes_fasta_chr=$dirprochr."/".$genome.".chr.genes.fasta";
+		my $genes_fasta_chrtmp=$dirprochr."/".$genome.".chr.genes.fastatmp";
+
+		system("prodigal -i $output_chr -o $genes_gff_chrtmp -a $genes_faa_chr -d $genes_fasta_chr -f gff -q");
+		system("\(cat $genes_gff_chrtmp; echo '##FASTA'; cat  $output_chr\) >$genes_gff_chr");              
+		my $cmd_awk1="awk '/^>/{\$0=\$0\":$genome\"}1'  $genes_gff_chr > $genes_gff_chrtmp";
+		my $cmd_awk2="awk '/^>/{\$0=\$0\":$genome\"}1'  $genes_faa_chr > $genes_faa_chrtmp";
+		my $cmd_awk3="awk '/^>/{\$0=\$0\":$genome\"}1'  $genes_fasta_chr > $genes_fasta_chrtmp";
+		system($cmd_awk1);
+		system($cmd_awk2);
+		system($cmd_awk3);
+		system("mv $genes_gff_chrtmp $genes_gff_chr");
+		system("mv $genes_faa_chrtmp $genes_faa_chr");
+		system("mv $genes_fasta_chrtmp $genes_fasta_chr");
+	}
+	if($plasmid_pred eq "SI"){
+		if(-s $output_plasmid){
+			my $genes_gff_plas= $dirproplas."/".$genome.".plasmid.genes.gff";
+			my $genes_gfftmp_plas= $dirproplas."/".$genome.".plasmid.genes.gfftmp";
+			my $genes_faa_plas= $dirproplas."/".$genome.".plasmid.genes.faa";
+			my $genes_faatmp_plas= $dirproplas."/".$genome.".plasmid.genes.faatmp";
+			my $genes_fasta_plas= $dirproplas."/".$genome.".plasmid.genes.fasta";
+			my $genes_fastatmp_plas= $dirproplas."/".$genome.".plasmid.genes.fastatmp";
+	
+			system("prodigal -i $output_plasmid -o $genes_gfftmp_plas -a $genes_faa_plas -d $genes_fasta_plas -f gff -q");
+			system("\(cat $genes_gfftmp_plas; echo '##FASTA'; cat $output_plasmid\) >$genes_gff_plas");
+			my $cmd_awk1="awk '/^>/{\$0=\$0\":$genome\"}1'  $genes_gff_plas > $genes_gfftmp_plas ";
+			my $cmd_awk2="awk '/^>/{\$0=\$0\":$genome\"}1'  $genes_faa_plas > $genes_faatmp_plas ";
+			my $cmd_awk3="awk '/^>/{\$0=\$0\":$genome\"}1'  $genes_fasta_plas > $genes_fastatmp_plas ";
+			system($cmd_awk1);
+			system($cmd_awk2);
+			system($cmd_awk3);
+			system("mv $genes_gfftmp_plas $genes_gff_plas ");
+			system("mv $genes_faatmp_plas $genes_faa_plas ");
+			system("mv $genes_fastatmp_plas $genes_fasta_plas");
+		}
 	}
 }
 
-
-sub sub5_1chr{
-my $seq = shift;
-$seq=$diroriginalgenomes."/".$seq;
-my $genome=basename($seq);
-
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
-my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
-my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
-my $temp1=$genes_fasta1.".tmp";
-
-
-
-	foreach my $gene(@genes){
-	
-	my $genename=basename($gene);
-	my $gene_id=$diroriginalgenes."/".$genename;
-	$gene_id=~s/.fasta$//g;
-	
-	my $gene_tag=basename($gene);
-	$gene_tag=~s/.fasta$//g;
-	
-	
-my $outputblast1= $dirprochr."/".$genome.".".$gene_tag.".Blast.txt";
-my $tempblast=$outputblast1.".tmp";
-
-	 
-  if ($genes_type eq "nucl"){
-		if(-s $genes_fasta1){
-
-		my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast";
-		system ($cmd_highper);
-		system (" mv $tempblast $outputblast1")
-		
-		}
-		#print "\n\n\n\n find $diroutput/*/ -size 0 |  xargs rm \n\n\n\n ";
-		#system("find $diroutput/*/ -size 0 |  xargs rm");
-}elsif ($genes_type eq "prot"){
-	if(-s $genes_fasta1){
-
-		my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast";
-		system ($cmd_highper);
-		system (" mv $tempblast $outputblast1")
-		}
-		#print "\n\n\n\n find $diroutput/*/ -size 0 |  xargs rm \n\n\n\n ";
-		#system("find $diroutput/*/ -size 0 |  xargs rm");
-		}
-		
-	}
-
+sub modify_file{
+	my $file=shift;
+	my $tmp=$file.".tmp";
+	my $cmd1="sed 's/ # /###/g' $file >$tmp";
+	my $cmd2="awk '/^>/ {printf(\"\\n\%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $tmp > $file";	
+	system($cmd1);
+	system($cmd2);
+	system("rm $tmp");
 }
 
+sub sub8_modifed_header_chrplas{
+	my $seq = shift;
+	my $genome=basename($seq);
+    my ($dirproplas, $dirprochr,$input_plasmid,$input_chr,$output_plasmid,$output_chr,$name_output_plasmid,$name_output_chr,$output_alignments_chr,$output_alignments_plas) = var_inputs($genome);
+	my $genes_gff_chr=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_faa_chr=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_fasta_chr=$dirprochr."/".$genome.".chr.genes.fasta";
+	if(-s $genes_fasta_chr){
+		modify_file($genes_faa_chr);
+		modify_file($genes_fasta_chr);
+	}
+	if($plasmid_pred eq "SI"){
+		my $genes_gff_plas= $dirproplas."/".$genome.".plasmid.genes.gff";
+		my $genes_faa_plas= $dirproplas."/".$genome.".plasmid.genes.faa";	
+		my $genes_fasta_plas= $dirproplas."/".$genome.".plasmid.genes.fasta";
+		if(-s $genes_fasta_plas){
+			modify_file($genes_faa_plas);
+			modify_file($genes_fasta_plas);
+		}
+	}
+}
 
-
-
-sub sub6_chr{
-my $seq = shift;
-$seq=$diroriginalgenomes."/".$seq;
-my $genome=basename($seq);
-my $dirprochr=$diroutput."/".$genome.".chromosome";
-my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
-my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
-my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
-my $temp1=$genes_fasta1.".tmp";
+sub sub9_blast{
+	my $seq = shift;
+	my $genome=basename($seq);
+    my ($dirproplas, $dirprochr,$input_plasmid,$input_chr,$output_plasmid,$output_chr,$name_output_plasmid,$name_output_chr,$output_alignments_chr,$output_alignments_plas) = var_inputs($genome);
+	
+	my $genes_gff_plas= $dirproplas."/".$genome.".plasmid.genes.gff";
+	my $genes_faa_plas= $dirproplas."/".$genome.".plasmid.genes.faa";
+	my $genes_fasta_plas= $dirproplas."/".$genome.".plasmid.genes.fasta";
+	my $temp=$genes_fasta_plas.".tmp";
+	
+	my $genes_gff_chr=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_faa_chr=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_fasta_chr=$dirprochr."/".$genome.".chr.genes.fasta";
+	my $temp1=$genes_fasta_chr.".tmp";
 
 	foreach my $gene(@genes){
+		my $genename=basename($gene);
+		my $gene_id=$dirModifiedGenes."/".$genename;
+		$gene_id=~s/.fasta$//g;
+		my $gene_tag=$genename;
+		$gene_tag=~s/.fasta$//g;
+			
+		if ($genes_type eq "nucl"){	
+			if(-s $genes_fasta_chr){
+				my $outputblast_chr= $output_alignments_chr."/".$gene_tag.".Blast.txt";
+				my $cmd_blast_chr="blastn -query $genes_fasta_chr -db $gene_id -dust no -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send mismatch gapope evalue bitscore\" -perc_identity $percentage -out $outputblast_chr";
+				system ($cmd_blast_chr);
+			}
+			if( $plasmid_pred eq "SI"){
+				if(-s $genes_fasta_plas){
+					my $outputblast_plas= $output_alignments_plas."/".$gene_tag.".Blast.txt";
+					my $cmd_blast_plas="blastn -query $genes_fasta_plas -db $gene_id -dust no -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send mismatch gapope evalue bitscore\" -perc_identity $percentage -out $outputblast_plas";
+					system ($cmd_blast_plas);
+					}
+				}	
+		}elsif ($genes_type eq "prot"){
+			if(-s $genes_fasta_chr){
+				my $outputblast_chr= $output_alignments_chr."/".$gene_tag.".Blast.txt";
+				my $tempblast_chr=$outputblast_chr.".tmp";
+				my $cmd_blast="blastp -query $genes_faa_chr -db $gene_id -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send evalue bitscore qcovs qcovhsp scovhsp\"  -out $outputblast_chr";
+				system ($cmd_blast);
+				my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast_chr >$tempblast_chr";
+				system ($cmd_highper);
+				system ("mv $tempblast_chr $outputblast_chr")
+			}
+			if( $plasmid_pred eq "SI"){
+				if(-s $genes_fasta_plas){					
+					my $outputblast_plas= $output_alignments_plas."/".$gene_tag.".Blast.txt";
+					my $tempblast_plas=$outputblast_plas.".tmp";
+					my $cmd_blast1="blastp -query $genes_faa_plas -db $gene_id -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send evalue bitscore qcovs qcovhsp scovhsp\"  -out $outputblast_plas";
+					system ($cmd_blast1);
+					my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast_plas >$tempblast_plas";
+					system ($cmd_highper);
+					system ("mv $tempblast_plas $outputblast_plas");
+					}
+				}
+			}
+	}
+}
+
+sub sub10_curate_alignment{
+	my $seq = shift;
+	my $genome=basename($seq);
+    my ($dirproplas, $dirprochr,$input_plasmid,$input_chr,$output_plasmid,$output_chr,$name_output_plasmid,$name_output_chr,$output_alignments_chr,$output_alignments_plas) = var_inputs($genome);
+
+	my $genes_gff_plas= $dirproplas."/".$genome.".plasmid.genes.gff";
+	my $genes_faa_plas= $dirproplas."/".$genome.".plasmid.genes.faa";
+	my $genes_fasta_plas= $dirproplas."/".$genome.".plasmid.genes.fasta";
+	my $temp=$genes_fasta_plas.".tmp";
+
+	my $genes_gff_chr=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_faa_chr=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_fasta_chr=$dirprochr."/".$genome.".chr.genes.fasta";
+	my $temp1=$genes_fasta_chr.".tmp";
 	
-	my $genename=basename($gene);
-	my $gene_id=$diroriginalgenes."/".$genename;
-	$gene_id=~s/.fasta$//g;
-	
-	my $gene_tag=basename($gene);
-	$gene_tag=~s/.fasta$//g;
+	foreach my $gene(@genes){
+		my $genename=basename($gene);
+		my $gene_id=$dirModifiedGenes."/".$genename;
+		$gene_id=~s/.fasta$//g;
+		my $gene_tag=$genename;
+		$gene_tag=~s/.fasta$//g;
 
-	my $outputblast1= $dirprochr."/".$genome.".".$gene_tag.".Blast.txt";
-	my $gene_ref=$gene_id.".fasta";
-
-print($outputblast1);
-
-if(-s $outputblast1){
-my $temp_chr=$dirprochr.".".$gene_tag.".tmp";
-	system("cut -f 1 $outputblast1 >$temp_chr");
-
-	my $output_gene1= $dirprochr."/".$gene_tag.".fasta";
-	
-	if( $genes_type eq 'nucl'){
-	system("xargs samtools faidx $genes_fasta1< $temp_chr >$output_gene1");
-}elsif($genes_type eq 'prot'){
-system("xargs samtools faidx $genes_faa1< $temp_chr >$output_gene1");}
-	
-	
-	
-	system("rm $temp_chr");
-	my $output_ref_chr=$dirprochr."/".$genome.".".$gene_tag.".plusRef.fasta";
-	system("cat $gene_ref $output_gene1 >$output_ref_chr");
-
-my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".chr.out.alignments.description";
-	open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
-
-my $gene_genome_chr_out_alignment_AA_fasta=$dirresultspep."/".$gene_tag."_".$genome.".AAsequence.fasta";
-		open OUT1, ">$gene_genome_chr_out_alignment_AA_fasta" or die "Cannot open $gene_genome_chr_out_alignment_AA_fasta for writing\n";
-
-my $gene_genome_chr_out_alignment_nt_fasta=$dirresults."/".$gene_tag."_".$genome.".nt_alignment.fasta.tmp";
-		open OUT2, ">$gene_genome_chr_out_alignment_nt_fasta" or die "Cannot open  $gene_genome_chr_out_alignment_nt_fasta for writing\n";
-
-	  	
-	  	#print " Rscript curatingAlignments.r  $output_ref_chr $gene_tag $gene_genome_chr_out_alignment_nt_fasta $gene_genome_chr_out_alignment_AA_fasta $out_alignment_description --slave\n\n";
-
-  		system(" Rscript $results_folder/scripts/curatingAlignments.r  $output_ref_chr $gene_tag $gene_genome_chr_out_alignment_nt_fasta $gene_genome_chr_out_alignment_AA_fasta $out_alignment_description --slave");
-
+		my $gene_ref=$gene_id.".fasta";
+		
+		my $outputblast_chr= $output_alignments_chr."/".$gene_tag.".Blast.txt";
+		my $tempblast_chr=$outputblast_chr.".tmp";
+		
+		if(-s $outputblast_chr){
+			my $temp_chr=$output_alignments_chr."/".$gene_tag.".tmp";
+			system("cut -f 1 $outputblast_chr >$temp_chr");
+			my $output_gene_chr= $output_alignments_chr."/".$gene_tag.".fasta";
+			if( $genes_type eq 'nucl'){
+				system("xargs samtools faidx $genes_fasta_chr < $temp_chr >$output_gene_chr");
+			}elsif($genes_type eq 'prot'){
+				system("xargs samtools faidx $genes_faa_chr < $temp_chr >$output_gene_chr");
+			}
+				my $cmd_awk="awk '/^>/ {printf(\"\\n\%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $output_gene_chr > $output_gene_chr.tmp";	
+				system($cmd_awk);
+				system("mv $output_gene_chr.tmp $output_gene_chr");
+				system("rm $temp_chr");
+				my $output_ref_chr=$output_gene_chr.".plusRef.fasta";
+				my $cmd="\(cat $gene_ref; cat $output_gene_chr\) > $output_ref_chr";
+				system($cmd);
+				my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".chr.out.alignments.description";
+				open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
+				my $gene_genome_chr_out_alignment_AA_fasta=$dirresultspep."/".$gene_tag."_".$genome.".chr.AAsequence.fasta";
+				open OUT1, ">$gene_genome_chr_out_alignment_AA_fasta" or die "Cannot open $gene_genome_chr_out_alignment_AA_fasta for writing\n";
+				my $gene_genome_chr_out_alignment_nt_fasta=$dirresults."/".$gene_tag."_".$genome.".chr_alignment.fasta.tmp";
+				open OUT2, ">$gene_genome_chr_out_alignment_nt_fasta" or die "Cannot open  $gene_genome_chr_out_alignment_nt_fasta for writing\n";
+				my $rcmd=" Rscript $results_folder/scripts/curatingAlignments.r  $output_ref_chr $gene_tag $gene_genome_chr_out_alignment_nt_fasta $gene_genome_chr_out_alignment_AA_fasta $out_alignment_description --slave";
+				print "-------$rcmd-------\n\n";
+				system($rcmd);
 		}else { 
- my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".chr.out.alignments.description";
-	open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
-	
-
-	my $firstline_Ref=`grep ">" $gene_id.fasta`;
-	chomp($firstline_Ref);
-		$firstline_Ref=~s/[\n\r]//g;
-		$firstline_Ref=~s/>//g;
-	print OUT "$genename\t\"$firstline_Ref\"\tNA\tNA\tNA\t\"$genome\"\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tchromosome\tabsent\t0\t0\t0\n";
-	close OUT;
-
-
- }
+ 				my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".chr.out.alignments.description";
+				open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
+				my $firstline_Ref=`grep ">" $gene_ref`;
+				chomp($firstline_Ref);
+				$firstline_Ref=~s/[\n\r]//g;
+				$firstline_Ref=~s/>//g;
+				print OUT "$genename\t\"$firstline_Ref\"\tNA\tNA\tNA\t\"$genome\"\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tchromosome\tabsent\t0\t0\t0\n";
+				close OUT;
+	 	}
+		my $outputblast_plas= $output_alignments_plas."/".$gene_tag.".Blast.txt";
+		my $tempblast_plas=$outputblast_plas.".tmp";
+		if($plasmid_pred eq "SI"){
+			if(-s $outputblast_plas){
+				
+				my $temp_plasmid=$output_alignments_plas."/".$gene_tag.".tmp";
+				system("cut -f 1 $outputblast_plas >$temp_plasmid");
+				my $output_gene_plas= $output_alignments_plas."/".$gene_tag.".fasta";
+				if( $genes_type eq 'nucl'){
+					system("xargs samtools faidx $genes_fasta_plas< $temp_plasmid >$output_gene_plas");
+				}elsif($genes_type eq 'prot'){
+						system("xargs samtools faidx $genes_faa_plas< $temp_plasmid >$output_gene_plas");
+				}
+				my $cmd_awk="awk '/^>/ {printf(\"\\n\%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $output_gene_plas > $output_gene_plas.tmp";	
+				system($cmd_awk);
+				system("mv $output_gene_plas.tmp $output_gene_plas");
+				system("rm $temp_plasmid");
+				my $output_ref_plasmid=$output_gene_plas.".plusRef.fasta";
+				my $cmd="\(cat $gene_ref; cat $output_gene_plas\) > $output_ref_plasmid";
+				system($cmd);
+				my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".plasmid.out.alignments.description";
+				open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
+				my $gene_genome_plas_out_alignment_AA_fasta=$dirresultspep."/".$gene_tag."_".$genome.".plasm.AAsequence.fasta";
+				open OUT1, ">$gene_genome_plas_out_alignment_AA_fasta" or die "Cannot open $gene_genome_plas_out_alignment_AA_fasta for writing\n";
+				my $gene_genome_plas_out_alignment_nt_fasta=$dirresults."/".$gene_tag."_".$genome.".plasm_alignment.fasta.tmp";
+				open OUT2, ">$gene_genome_plas_out_alignment_nt_fasta" or die "Cannot open  $gene_genome_plas_out_alignment_nt_fasta for writing\n";
+				my $rcmd="Rscript $results_folder/scripts/curatingAlignments.r $output_ref_plasmid $gene_tag $gene_genome_plas_out_alignment_nt_fasta $gene_genome_plas_out_alignment_AA_fasta $out_alignment_description --slave";
+				print "--------- $rcmd -------------\n\n";
+				system($rcmd);
+			}else { 
+				my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".plasmid.out.alignments.description";
+				open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
+				my $firstline_Ref=`grep ">" $gene_ref`;
+				chomp($firstline_Ref);
+				$firstline_Ref=~s/[\n\r]//g;
+				$firstline_Ref=~s/>//g;
+				print OUT "$genename\t\"$firstline_Ref\"\tNA\tNA\tNA\t\"$genome\"\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tplasmid\tabsent\t0\t0\t0\n";
+				close OUT;
+				}	
+		}
 	}
 }
 
 
-
-
-#########################################################################################
-
-#afork, the first argument is an array - a child will be 
-#forked for each array element. The second argument indicates the maximum 
-#number of children that may be alive at one time. The third argument is a 
-#code reference; this is the code that will be executed by the child. One 
-#argument will be given to this code fragment; for mfork it will be an increasing number,
-#starting at one. Each next child gets the next number. For afork, the array element is 
-#passed. Note that this code will assume no other children will be spawned, 
-#and that $SIG {CHLD} hasn't been set to IGNORE. 
+####################################################################################################################################################################################################################################################################################################################################################################
+#parallel
 
 sub afork (\@$&) {
-my ($data, $max, $code) = @_;
-my $c = 0;
-foreach my $data (@$data) {
-wait unless ++ $c <= $max;
-die "Fork failed: $!\n" unless defined (my $pid = fork);
-exit $code -> ($data) unless $pid;
+	my ($data, $max, $code) = @_;
+	my $c = 0;
+	my %hash;
+	foreach my $data (@$data) {
+		wait unless ++ $c <= $max;
+		die "Fork failed: $!\n" unless defined (my $pid = fork);
+		exit $code -> ($data) unless $pid;
+		print($data);
+		$hash{$pid}=$data;
+	}
+	1 until -1 == wait;
+	#my $child_pid = wait();
+	#my $status = $?;
+	#if ( $status == -1  ) { die "wait failed File: ".$hash{$child_pid}."\n"; }
+	#elsif ( $status & 127) { warn "Child $child_pid killed by signal File: ".$hash{$child_pid}."\n".( $? & 127)."\n"; }
+	#elsif ( $status & 128) { warn "Child $child_pid. There was a core dump! File: ".$hash{$child_pid}."\n ".(  $? & 128)."\n"; }
+	#elsif ( $status & 0x7F ) { warn "Child $child_pid killed by signal File: ".$hash{$child_pid}."\n".( $? & 0x7F )."\n"; }
+	#elsif ( $status >> 8   ) { warn "Child $child_pid exited with error File: ".$hash{$child_pid}."\n".( $? >> 8 )."\n"; }
+	#else                     { print "Child $child_pid exited successfully\n"; }
 
 }
 
-my $child_pid = wait();
-my $status = $?;
+#######################################################################################################################################################################################################################################################################################################################################################################
+#CREATING R SCRIPTS
 
-1 until -1 == wait;
-if    ( $status == -1  ) { die "wait failed: $!\n"; }
-elsif ( $status & 127) { warn "Child $child_pid killed by signal ".(  $? & 127)."\n"; }
-elsif ( $status & 128) { warn "Child $child_pid. There was a core dump!\n ".(  $? & 128)."\n"; }
-elsif ( $status & 0x7F ) { warn "Child $child_pid killed by signal ".( $? & 0x7F )."\n"; }
-elsif ( $status >> 8   ) { warn "Child $child_pid exited with error $data".( $? >> 8 )."\n"; }
-else                     { print "Child $child_pid exited successfully\n"; }
-
-}
-#######
-##usage afork(@array,$numberofcores,\&subroutine);
-
-#sub normal(\@&){
-
-#my ($data, $code) = @_;
-# foreach my $sequence(@$data){
-#  $code -> ($sequence);
-# }
-#}
-#normal(@seq,\&sub);
-
-
-
-
-###################################CREATING R SCRIPTS
- if($species ne "NO"){
+# this bit can be use to use mlplasmid or plasclass method
+ if($plasmid_pred eq "SI"){
  $R_file="$results_folder/scripts/plasmid_chromosome_Detection.r";
 	
 		open R_SCRIPT,">$R_file" or die "Cannot write $R_file script\n";
 
         	 $R_script= "
     rm(list=ls()); 
-    suppressMessages(suppressWarnings(library(mlplasmids)))
     options(warn=-1)
     options(stringsAsFactors = FALSE)
     args = commandArgs(trailingOnly=TRUE)
@@ -1248,86 +729,77 @@ x=all[ all['Prediction']=='Chromosome',]
 	
 	
 if ( $genes_type eq 'nucl'){
+	$R_file="$results_folder/scripts/curatingAlignments.r";
+	open R_SCRIPT,">$R_file" or die "Cannot write  $R_file script\n";
+	$R_script= "
+rm(list=ls()); 
+Sys.setenv('R_MAX_VSIZE'=32000000000)
+suppressMessages(suppressWarnings(library(msa)))
+suppressMessages(suppressWarnings(library(reshape2)))
+suppressMessages(suppressWarnings(library(seqinr)))
+suppressMessages(suppressWarnings(library( Biostrings)))
+suppressMessages(suppressWarnings(library(stringr)))
+options(warn=-1)
+options(stringsAsFactors = FALSE)
 
-$R_file="$results_folder/scripts/curatingAlignments.r";
+args = commandArgs(trailingOnly=TRUE)
+file=args[1]
+genename=args[2]
+out1=args[3]
+out2=args[4]
+out3=args[5]
+setwd(dirname(file))
+#print(getwd())
 
-		open R_SCRIPT,">$R_file" or die "Cannot write  $R_file script\n";
 
-        	 $R_script= "
-        	
-        	 rm(list=ls()); 
-        	 
-        	options(stringsAsFactors = FALSE)
-        	args = commandArgs(trailingOnly=TRUE)
-			file=args[1]
-			genename=args[2]
-			out1=args[3]
-			out2=args[4]
-			out3=args[5]
-			setwd(dirname(file))
-			#print(getwd())
-				Sys.setenv('R_MAX_VSIZE'=32000000000)
 
-				suppressMessages(suppressWarnings(library(msa)))
-				suppressMessages(suppressWarnings(library(reshape2)))
-				suppressMessages(suppressWarnings(library(seqinr)))
-				 suppressMessages(suppressWarnings(library( Biostrings)))
-				options(warn=-1)
-				    library(stringr)
-					##Functions
-	
-	
+##Functions
 
-findPotentialStartsAndStops <- function(DNA_string)
-  { positions =c()
+findPotentialStartsAndStops <- function(DNA_string){ 
+	positions =c()
    	types =c()
-     if(length(positions)==0){
-     codons            <- c('atg', 'taa', 'tag', 'tga','ATG', 'TAA', 'TAG', 'TGA')
-     for (i in  1:length(codons))
-     {
-        codon <- codons[i]
-        occurrences <- matchPattern(codon, DNA_string)
-      codonpositions <- occurrences\@ranges\@start  
-        numoccurrences <- length(codonpositions) 	
-   	positions   <- append(positions,codonpositions, after=length(positions))
-     types       <- append(types,rep(codon, numoccurrences), after=length(types))
- }
+    if(length(positions)==0){
+    	codons <- c('atg', 'taa', 'tag', 'tga','ATG', 'TAA', 'TAG', 'TGA')
+     	for (i in  1:length(codons))
+     	{
+        	codon <- codons[i]
+        	occurrences <- matchPattern(codon, DNA_string)
+      		codonpositions <- occurrences\@ranges\@start  
+        	numoccurrences <- length(codonpositions) 	
+   			positions <- append(positions,codonpositions, after=length(positions))
+     		types <- append(types,rep(codon, numoccurrences), after=length(types))
+ 		}
     indices <- order(positions)
-     positions <- positions[indices]
-     types <- types[indices]
-     mylist <- list(positions,types)
- return(mylist)
- 
-     }
-   }     
+    positions <- positions[indices]
+    types <- types[indices]
+    mylist <- list(positions,types)
+ 	return(mylist)
+	}
+}     
 
+findORFsinSeq <- function(sequence){
+	mylist <- findPotentialStartsAndStops(sequence)
+    positions <- mylist[[1]]
+    types <- mylist[[2]]
+    orfstarts <- numeric()
+    orfstops <- numeric()
+    orflengths <- numeric()
+    numpositions <- length(positions)
  
-  findORFsinSeq <- function(sequence)
-  {
-     mylist <- findPotentialStartsAndStops(sequence)
-     positions <- mylist[[1]]
-     types <- mylist[[2]]
-     orfstarts <- numeric()
-     orfstops <- numeric()
-     orflengths <- numeric()
-     numpositions <- length(positions)
- 
-     if (numpositions >= 2)
-     {
+    if (numpositions >= 2){
         for (i in 1:(numpositions-1))
         {
-           posi <- positions[i]
-           typei <- types[i]
-           found <- 0
-           while (found == 0)
-           {
+        	posi <- positions[i]
+           	typei <- types[i]
+           	found <- 0
+           	while (found == 0)
+           	{
               for (j in (i+1):numpositions)
               {
                  posj  <- positions[j]
                  typej <- types[j]
                  posdiff <- posj - posi
                  posdiffmod3 <- posdiff %% 3
-           
                  orflength <- posj - posi + 3
                  if ((typei == 'atg' || typei == 'ATG') && (typej == 'taa' || typej == 'tag' || typej == 'tga'||typej == 'TAA' || typej == 'TAG' || typej == 'TGA') && posdiffmod3 == 0)
                  {
@@ -1371,8 +843,8 @@ findPotentialStartsAndStops <- function(DNA_string)
      return(mylist)
   }
   
-			seq2Fasta <- function(seq,name,filename) 
-				{
+
+seq2Fasta <- function(seq,name,filename){
   						sink(filename,append=TRUE)
     					cat(paste0('>', name),file=filename,append=TRUE)
     					cat('\\n',file=filename,append=TRUE)
@@ -1381,10 +853,9 @@ findPotentialStartsAndStops <- function(DNA_string)
     					cat(the.sequence,file=filename,append=TRUE)
     					cat('\\n',file=filename,append=TRUE)  
   						sink(NULL)
-				}
-				
-						seqAA2Fasta <- function(seq,name,filename) 
-				{
+						}
+
+seqAA2Fasta <- function(seq,name,filename){
   						sink(filename,append=TRUE)
     					cat(paste0('>', name),file=filename,append=TRUE)
     					cat('\\n',file=filename,append=TRUE)
@@ -1392,9 +863,10 @@ findPotentialStartsAndStops <- function(DNA_string)
     					cat(the.sequence,file=filename,append=TRUE)
     					cat('\\n',file=filename,append=TRUE)  
   						sink(NULL)
-				}
+						}
 
-		Alignment <- function(x){
+
+Alignment <- function(x){
     	tryCatch(
         expr = {
  		return(invisible(msa(x,gapExtension =150,gap=1500,method='Muscle')))
@@ -1402,8 +874,7 @@ findPotentialStartsAndStops <- function(DNA_string)
        		 },
         error = function(e){
             message('Caught an error!')
-		return(invisible(msa(x)))
-
+			return(invisible(msa(x)))
         },
         warning = function(w){
            message('Caught an warning!')
@@ -1416,221 +887,204 @@ findPotentialStartsAndStops <- function(DNA_string)
 		}
 
 
-		mySequences <- readDNAStringSet(file)
-		namesunique=unique(mySequences\@ranges\@NAMES)
-		mySequences <- mySequences[namesunique]
-		
-		myFirstAlignment=Alignment(mySequences)
-
-		myFirstAlignment_reverse=Alignment(c(reverseComplement(mySequences[1]),mySequences[2]))
-
- 		FA=msaConsensusSequence(myFirstAlignment)
- 		FAR=msaConsensusSequence(myFirstAlignment_reverse)
-
-		Consensus=str_count(FA, pattern = '\\\\?')
- 		Consensus_reverse=str_count(FAR, pattern ='\\\\?')
+mySequences <- readDNAStringSet(file)
+namesunique=unique(mySequences\@ranges\@NAMES)
+mySequences <- mySequences[namesunique]
+myFirstAlignment=Alignment(mySequences)
+myFirstAlignment_reverse=Alignment(c(reverseComplement(mySequences[1]),mySequences[2]))
+FA=msaConsensusSequence(myFirstAlignment)
+FAR=msaConsensusSequence(myFirstAlignment_reverse)
+Consensus=str_count(FA, pattern = '\\\\?')
+Consensus_reverse=str_count(FAR, pattern ='\\\\?')
 	
-		if(Consensus<Consensus_reverse){myFirstAlignment=myFirstAlignment}else{myFirstAlignment=myFirstAlignment_reverse}		
+if(Consensus<Consensus_reverse){myFirstAlignment=myFirstAlignment}else{myFirstAlignment=myFirstAlignment_reverse}		
 
-		#check for several genes
-		location=ifelse(grepl('plasmid',file),'plasmid','chromosome')
+#check for several genes
+location=ifelse(grepl('plasmid',file),'plasmid','chromosome')
+nSeq=length(rownames(myFirstAlignment))
+#print(paste('number found',nSeq,sep=' '))
 
-
-		nSeq=length(rownames(myFirstAlignment))
-		#print(paste('number found',nSeq,sep=' '))
-	
-  if(nSeq==2){
-  		#print('2 sequences')
-      		
-     X_Alignment=myFirstAlignment
-
-query=rownames(X_Alignment)[2]
-      		Seq=toString(unmasked(X_Alignment)[[query]] )
-      		Seq_string=strsplit(toString(Seq),'')
-  			x=table(strsplit(Seq,''))
-  			gaps=x['-']
-  			if(is.na(gaps)){gaps=0}
-  			Seq_nogaps=gsub('-','',Seq)
-  			x=table(strsplit(Seq_nogaps,''))
-  			xORF=findORFsinSeq(Seq_nogaps)
-  			bestORF=xORF[ xORF\$orflengths==max(xORF\$orflengths),]
-			query_trans=Biostrings::translate(DNAString(substring(Seq_nogaps, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
-      		Seq_trl=query_trans
-  			length_Seqtrl=length(Seq_trl)
-      		Seq_trl_string=strsplit(toString(Seq_trl),'')	
-      		stops=which( Seq_trl_string[[1]]=='*')
-  		
-
-			######
-			ref=rownames(X_Alignment)[1]
-      		Seqref=toString(unmasked(X_Alignment)[[ref]] )
-
-      		Seqref_string=strsplit(toString(Seqref),'')
-      		xref=table(Seqref_string)
-      		gapsref=xref['-']
-      		if(is.na(gapsref)){gapsref=0}
-      		Seq_nogapsref=gsub('-','',Seqref)
-      		xref=table(strsplit(Seq_nogapsref,''))
-      		xORFref=findORFsinSeq(Seq_nogapsref)
-			bestORF=xORFref[ xORFref\$orflengths==max(xORFref\$orflengths),]
-			ref_trans=Biostrings::translate(DNAString(substring(Seq_nogapsref, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
-      		Seq_trlref=ref_trans
-      		length_Seqtrlref=length(ref_trans)
-      		Seq_trl_stringref=strsplit(toString(Seq_trlref),'')	
-      		stopsref=which( Seq_trl_stringref[[1]]=='*')
-
-######	
-			Align=data.frame(Ref=c(unlist(Seqref_string)),Query=c(unlist(Seq_string)))
-				Align\$position=c(1:dim(Align)[1])
-
-	
-			Align\$Ref=as.character(Align\$Ref)
-			Align\$Query=as.character(Align\$Query)
-			Align\$mutation=paste(Align\$Ref,Align\$position,Align\$Query,sep='')
-			Align\$Change='identical'
-			Align\$Change[ Align\$Query!=Align\$Ref ]='SNP'
-			Align\$Change[ Align\$Query=='-' | Align\$Query=='N' ]='GAP'
-			Align\$Change[ Align\$Ref=='-' | Align\$Ref=='N' ]='INSERTION'
+if(nSeq==2){
+	#print('2 sequences')
+	X_Alignment=myFirstAlignment
+	query=rownames(X_Alignment)[2]
+	Seq=toString(unmasked(X_Alignment)[[query]] )
+	Seq_string=strsplit(toString(Seq),'')
+	x=table(strsplit(Seq,''))
+	gaps=x['-']
+	if(is.na(gaps)){gaps=0}
+	Seq_nogaps=gsub('-','',Seq)
+	x=table(strsplit(Seq_nogaps,''))
+	xORF=findORFsinSeq(Seq_nogaps)
+	bestORF=xORF[ xORF\$orflengths==max(xORF\$orflengths),]
+	query_trans=Biostrings::translate(DNAString(substring(Seq_nogaps, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
+	Seq_trl=query_trans
+	length_Seqtrl=length(Seq_trl)
+	Seq_trl_string=strsplit(toString(Seq_trl),'')	
+	stops=which( Seq_trl_string[[1]]=='*')
 			
-			
-			changesSNPs=Align[Align\$Change=='SNP',]
-			changesGAPs=Align[Align\$Change=='GAP',]
-			changesINSERTION=Align[Align\$Change=='INSERTION',]
-			SNPs=paste(changesSNPs\$mutation,collapse=',')
-			GAPs=paste(changesGAPs\$mutation,collapse=',')
-			INSERTION=paste(changesINSERTION\$mutation,collapse=',')
-			
-			myAlignment=myFirstAlignment
-			Ncopies=1
-    }
+	######
+	ref=rownames(X_Alignment)[1]
+	Seqref=toString(unmasked(X_Alignment)[[ref]] )
+	Seqref_string=strsplit(toString(Seqref),'')
+	xref=table(Seqref_string)
+	gapsref=xref['-']
+	if(is.na(gapsref)){gapsref=0}
+	Seq_nogapsref=gsub('-','',Seqref)
+	xref=table(strsplit(Seq_nogapsref,''))
+	xORFref=findORFsinSeq(Seq_nogapsref)
+	bestORF=xORFref[ xORFref\$orflengths==max(xORFref\$orflengths),]
+	ref_trans=Biostrings::translate(DNAString(substring(Seq_nogapsref, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
+	Seq_trlref=ref_trans
+	length_Seqtrlref=length(ref_trans)
+	Seq_trl_stringref=strsplit(toString(Seq_trlref),'')	
+	stopsref=which( Seq_trl_stringref[[1]]=='*')
+
+	######	
+	Align=data.frame(Ref=c(unlist(Seqref_string)),Query=c(unlist(Seq_string)))
+	Align\$position=c(1:dim(Align)[1])
+	Align\$Ref=as.character(Align\$Ref)
+	Align\$Query=as.character(Align\$Query)
+	Align\$mutation=paste(Align\$Ref,Align\$position,Align\$Query,sep='')
+	Align\$Change='identical'
+	Align\$Change[ Align\$Query!=Align\$Ref ]='SNP'
+	Align\$Change[ Align\$Query=='-' | Align\$Query=='N' ]='GAP'
+	Align\$Change[ Align\$Ref=='-' | Align\$Ref=='N' ]='INSERTION'
+				
+				
+	changesSNPs=Align[Align\$Change=='SNP',]
+	changesGAPs=Align[Align\$Change=='GAP',]
+	changesINSERTION=Align[Align\$Change=='INSERTION',]
+	SNPs=paste(changesSNPs\$mutation,collapse=',')
+	GAPs=paste(changesGAPs\$mutation,collapse=',')
+	INSERTION=paste(changesINSERTION\$mutation,collapse=',')
+				
+	myAlignment=myFirstAlignment
+	Ncopies=1
+}
     
-      k=0
- 	 if(nSeq==3){
- 		#print('3 sequences')
- 	 sequences=length(mySequences\@ranges\@NAMES)
- 	  xx <- as.data.frame(matrix(ncol=sequences, nrow=myFirstAlignment\@unmasked\@ranges\@width[1]))
+k=0
+
+if(nSeq==3){
+	#print('3 sequences')
+ 	sequences=length(mySequences\@ranges\@NAMES)
+ 	xx <- as.data.frame(matrix(ncol=sequences, nrow=myFirstAlignment\@unmasked\@ranges\@width[1]))
  
-	  names=matrix(ncol=sequences, nrow=1)
+	names=matrix(ncol=sequences, nrow=1)
 	 
-    		for( i in mySequences\@ranges\@NAMES){ 
-        	x=c(unlist(strsplit(toString(unmasked(myFirstAlignment)[[i]]),'')))
-        	k=k+1
-    		xx[,k]=x
-        	names[,k]=i
-    		}
+    for( i in mySequences\@ranges\@NAMES){ 
+        x=c(unlist(strsplit(toString(unmasked(myFirstAlignment)[[i]]),'')))
+        k=k+1
+    	xx[,k]=x
+        names[,k]=i
+    }
   
     		
-    		xx\$consensus=apply(xx, 1, function(x) {
-						y=unique(x[-1])	
-    					y=y[y!='-']	
-						if(length(y)==0){y='-'}
-						if(length(y)>1){if(x[1]==x[2]){y=x[1]}}
-						if(length(y)>1){if(x[1]==x[3]){y=x[1]}}
-						if(length(y)>1){y='N'}
-						return(y)})
+    xx\$consensus=apply(xx, 1, function(x) {
+					y=unique(x[-1])	
+    				y=y[y!='-']	
+					if(length(y)==0){y='-'}
+					if(length(y)>1){if(x[1]==x[2]){y=x[1]}}
+					if(length(y)>1){if(x[1]==x[3]){y=x[1]}}
+					if(length(y)>1){y='N'}
+					return(y)})
 
-		conSeq=paste(xx\$consensus,collapse='')
-		conSeq=gsub('-','',conSeq)
-  		consensusSeq=DNAStringSet(conSeq)
+	conSeq=paste(xx\$consensus,collapse='')
+	conSeq=gsub('-','',conSeq)
+  	consensusSeq=DNAStringSet(conSeq)
+  	consensusSeq\@ranges\@NAMES=mySequences\@ranges\@NAMES[2]
+  	ref=DNAStringSet(mySequences[[1]])
+  	ref\@ranges\@NAMES=mySequences\@ranges\@NAMES[1]
   		
-  		consensusSeq\@ranges\@NAMES=mySequences\@ranges\@NAMES[2]
-  		ref=DNAStringSet(mySequences[[1]])
-  		ref\@ranges\@NAMES=mySequences\@ranges\@NAMES[1]
-  		
-  		myAlignment=invisible(Alignment(c(ref,consensusSeq)))
+  	myAlignment=invisible(Alignment(c(ref,consensusSeq)))
+	myAlignment_reverse=Alignment(c(reverseComplement(ref),consensusSeq))
 
-		myAlignment_reverse=Alignment(c(reverseComplement(ref),consensusSeq))
+ 	FA=msaConsensusSequence(myAlignment)
+ 	FAR=msaConsensusSequence(myAlignment_reverse)
 
- 		FA=msaConsensusSequence(myAlignment)
- 		FAR=msaConsensusSequence(myAlignment_reverse)
-
-		Consensus=str_count(FA, pattern = '\\\\?')
- 		Consensus_reverse=str_count(FAR, pattern ='\\\\?')
+	Consensus=str_count(FA, pattern = '\\\\?')
+ 	Consensus_reverse=str_count(FAR, pattern ='\\\\?')
 	
-		if(Consensus<Consensus_reverse){Alignment=myAlignment}else{myAlignment=myAlignment_reverse}
+	if(Consensus<Consensus_reverse){Alignment=myAlignment}else{myAlignment=myAlignment_reverse}
 	
-     X_Alignment=myAlignment
+    X_Alignment=myAlignment
 
-query=rownames(X_Alignment)[2]
-      		Seq=toString(unmasked(X_Alignment)[[query]] )
-      		Seq_string=strsplit(toString(Seq),'')
-  			x=table(strsplit(Seq,''))
-  			gaps=x['-']
-  			if(is.na(gaps)){gaps=0}
-  			Seq_nogaps=gsub('-','',Seq)
-  			x=table(strsplit(Seq_nogaps,''))
-  			xORF=findORFsinSeq(Seq_nogaps)
-  			bestORF=xORF[ xORF\$orflengths==max(xORF\$orflengths),]
-			query_trans=Biostrings::translate(DNAString(substring(Seq_nogaps, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
-      		Seq_trl=query_trans
-  			length_Seqtrl=length(Seq_trl)
-      		Seq_trl_string=strsplit(toString(Seq_trl),'')	
-      		stops=which( Seq_trl_string[[1]]=='*')
+	query=rownames(X_Alignment)[2]
+	Seq=toString(unmasked(X_Alignment)[[query]] )
+	Seq_string=strsplit(toString(Seq),'')
+	x=table(strsplit(Seq,''))
+	gaps=x['-']
+	if(is.na(gaps)){gaps=0}
+	Seq_nogaps=gsub('-','',Seq)
+	x=table(strsplit(Seq_nogaps,''))
+	xORF=findORFsinSeq(Seq_nogaps)
+	bestORF=xORF[ xORF\$orflengths==max(xORF\$orflengths),]
+	query_trans=Biostrings::translate(DNAString(substring(Seq_nogaps, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
+	Seq_trl=query_trans
+	length_Seqtrl=length(Seq_trl)
+	Seq_trl_string=strsplit(toString(Seq_trl),'')	
+	stops=which( Seq_trl_string[[1]]=='*')
   		
 
-			######
-			ref=rownames(X_Alignment)[1]
-      		Seqref=toString(unmasked(X_Alignment)[[ref]] )
+	######
+	ref=rownames(X_Alignment)[1]
+    Seqref=toString(unmasked(X_Alignment)[[ref]] )
 
-      		Seqref_string=strsplit(toString(Seqref),'')
-      		xref=table(Seqref_string)
-      		gapsref=xref['-']
-      		if(is.na(gapsref)){gapsref=0}
-      		Seq_nogapsref=gsub('-','',Seqref)
-      		xref=table(strsplit(Seq_nogapsref,''))
-      		xORFref=findORFsinSeq(Seq_nogapsref)
-			bestORF=xORFref[ xORFref\$orflengths==max(xORFref\$orflengths),]
-			ref_trans=Biostrings::translate(DNAString(substring(Seq_nogapsref, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
-      		Seq_trlref=ref_trans
-      		length_Seqtrlref=length(ref_trans)
-      		Seq_trl_stringref=strsplit(toString(Seq_trlref),'')	
-      		stopsref=which( Seq_trl_stringref[[1]]=='*')
+    Seqref_string=strsplit(toString(Seqref),'')
+    xref=table(Seqref_string)
+    gapsref=xref['-']
+    if(is.na(gapsref)){gapsref=0}
+    Seq_nogapsref=gsub('-','',Seqref)
+    xref=table(strsplit(Seq_nogapsref,''))
+    xORFref=findORFsinSeq(Seq_nogapsref)
+	bestORF=xORFref[ xORFref\$orflengths==max(xORFref\$orflengths),]
+	ref_trans=Biostrings::translate(DNAString(substring(Seq_nogapsref, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
+    Seq_trlref=ref_trans
+    length_Seqtrlref=length(ref_trans)
+    Seq_trl_stringref=strsplit(toString(Seq_trlref),'')	
+    stopsref=which( Seq_trl_stringref[[1]]=='*')
 
 ######	
-			Align=data.frame(Ref=c(unlist(Seqref_string)),Query=c(unlist(Seq_string)))
-				Align\$position=c(1:dim(Align)[1])
-
-	
-			Align\$Ref=as.character(Align\$Ref)
-			Align\$Query=as.character(Align\$Query)
-			Align\$mutation=paste(Align\$Ref,Align\$position,Align\$Query,sep='')
-			Align\$Change='identical'
-			Align\$Change[ Align\$Query!=Align\$Ref ]='SNP'
-			Align\$Change[ Align\$Query=='-' | Align\$Query=='N' ]='GAP'
-			Align\$Change[ Align\$Ref=='-' | Align\$Ref=='N' ]='INSERTION'
+	Align=data.frame(Ref=c(unlist(Seqref_string)),Query=c(unlist(Seq_string)))
+	Align\$position=c(1:dim(Align)[1])
+	Align\$Ref=as.character(Align\$Ref)
+	Align\$Query=as.character(Align\$Query)
+	Align\$mutation=paste(Align\$Ref,Align\$position,Align\$Query,sep='')
+	Align\$Change='identical'
+	Align\$Change[ Align\$Query!=Align\$Ref ]='SNP'
+	Align\$Change[ Align\$Query=='-' | Align\$Query=='N' ]='GAP'
+	Align\$Change[ Align\$Ref=='-' | Align\$Ref=='N' ]='INSERTION'
 			
 			
-			changesSNPs=Align[Align\$Change=='SNP',]
-			changesGAPs=Align[Align\$Change=='GAP',]
-			changesINSERTION=Align[Align\$Change=='INSERTION',]
-			SNPs=paste(changesSNPs\$mutation,collapse=',')
-			GAPs=paste(changesGAPs\$mutation,collapse=',')
-			INSERTION=paste(changesINSERTION\$mutation,collapse=',')
+	changesSNPs=Align[Align\$Change=='SNP',]
+	changesGAPs=Align[Align\$Change=='GAP',]
+	changesINSERTION=Align[Align\$Change=='INSERTION',]
+	SNPs=paste(changesSNPs\$mutation,collapse=',')
+	GAPs=paste(changesGAPs\$mutation,collapse=',')
+	INSERTION=paste(changesINSERTION\$mutation,collapse=',')
 
-			if(any(xx[,2]=='-') && any(xx[,3]=='-')){Ncopies=1}else{Ncopies=2}		
+	if(any(xx[,2]=='-') && any(xx[,3]=='-')){Ncopies=1}else{Ncopies=2}		
    
 }
 
 
 
-
+### voy aqui
 k=0
  if(nSeq==4){
- 		#print('4 sequences')
- 
-  sequences=length(mySequences\@ranges\@NAMES)
- 	  xx <- as.data.frame(matrix(ncol=sequences, nrow=myFirstAlignment\@unmasked\@ranges\@width[1]))
- 
-	  names=matrix(ncol=sequences, nrow=1)
+	#print('4 sequences')
+ 	sequences=length(mySequences\@ranges\@NAMES)
+ 	xx <- as.data.frame(matrix(ncol=sequences, nrow=myFirstAlignment\@unmasked\@ranges\@width[1]))
+ 	names=matrix(ncol=sequences, nrow=1)
 	 
-    		for( i in mySequences\@ranges\@NAMES){ 
-        	x=c(unlist(strsplit(toString(unmasked(myFirstAlignment)[[i]]),'')))
-        	k=k+1
-    		xx[,k]=x
-        	names[,k]=i
-    		}
+    for( i in mySequences\@ranges\@NAMES){ 
+        x=c(unlist(strsplit(toString(unmasked(myFirstAlignment)[[i]]),'')))
+        k=k+1
+    	xx[,k]=x
+        names[,k]=i
+    }
 
-		xx\$consensus=apply(xx, 1, function(x) {
+	xx\$consensus=apply(xx, 1, function(x) {
 						y=unique(x[-1])	
     					y=y[y!='-']	
 						if(length(y)==0){y='-'}
@@ -1641,85 +1095,83 @@ k=0
 						return(y)})
 
   		
-  		conSeq=paste(xx\$consensus,collapse='')
-		conSeq=gsub('-','',conSeq)
-  		consensusSeq=DNAStringSet(conSeq)
-  		consensusSeq\@ranges\@NAMES=mySequences\@ranges\@NAMES[2]
-  		ref=DNAStringSet(mySequences[[1]])
-  		ref\@ranges\@NAMES=mySequences\@ranges\@NAMES[1]
+  	conSeq=paste(xx\$consensus,collapse='')
+	conSeq=gsub('-','',conSeq)
+  	consensusSeq=DNAStringSet(conSeq)
+  	consensusSeq\@ranges\@NAMES=mySequences\@ranges\@NAMES[2]
+  	ref=DNAStringSet(mySequences[[1]])
+  	ref\@ranges\@NAMES=mySequences\@ranges\@NAMES[1]
   		
-  		myAlignment=invisible(Alignment(c(ref,consensusSeq)))
-		myAlignment_reverse=Alignment(c(reverseComplement(ref),consensusSeq))
+  	myAlignment=invisible(Alignment(c(ref,consensusSeq)))
+	myAlignment_reverse=Alignment(c(reverseComplement(ref),consensusSeq))
 
- 		FA=msaConsensusSequence(myAlignment)
- 		FAR=msaConsensusSequence(myAlignment_reverse)
+ 	FA=msaConsensusSequence(myAlignment)
+ 	FAR=msaConsensusSequence(myAlignment_reverse)
 
-		Consensus=str_count(FA, pattern = '\\\\?')
- 		Consensus_reverse=str_count(FAR, pattern ='\\\\?')
+	Consensus=str_count(FA, pattern = '\\\\?')
+ 	Consensus_reverse=str_count(FAR, pattern ='\\\\?')
 	
-		if(Consensus<Consensus_reverse){Alignment=myAlignment}else{myAlignment=myAlignment_reverse}
-  
+	if(Consensus<Consensus_reverse){Alignment=myAlignment}else{myAlignment=myAlignment_reverse}
+  	X_Alignment=myAlignment
 
-     X_Alignment=myAlignment
-
-query=rownames(X_Alignment)[2]
-      		Seq=toString(unmasked(X_Alignment)[[query]] )
-      		Seq_string=strsplit(toString(Seq),'')
-  			x=table(strsplit(Seq,''))
-  			gaps=x['-']
-  			if(is.na(gaps)){gaps=0}
-  			Seq_nogaps=gsub('-','',Seq)
-  			x=table(strsplit(Seq_nogaps,''))
-  			xORF=findORFsinSeq(Seq_nogaps)
-  			bestORF=xORF[ xORF\$orflengths==max(xORF\$orflengths),]
-			query_trans=Biostrings::translate(DNAString(substring(Seq_nogaps, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
-      		Seq_trl=query_trans
-  			length_Seqtrl=length(Seq_trl)
-      		Seq_trl_string=strsplit(toString(Seq_trl),'')	
-      		stops=which( Seq_trl_string[[1]]=='*')
+	query=rownames(X_Alignment)[2]
+    Seq=toString(unmasked(X_Alignment)[[query]] )
+    Seq_string=strsplit(toString(Seq),'')
+  	x=table(strsplit(Seq,''))
+  	gaps=x['-']
+  	if(is.na(gaps)){gaps=0}
+  	Seq_nogaps=gsub('-','',Seq)
+  	x=table(strsplit(Seq_nogaps,''))
+  	xORF=findORFsinSeq(Seq_nogaps)
+  	bestORF=xORF[ xORF\$orflengths==max(xORF\$orflengths),]
+	query_trans=Biostrings::translate(DNAString(substring(Seq_nogaps, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
+    Seq_trl=query_trans
+  	length_Seqtrl=length(Seq_trl)
+    Seq_trl_string=strsplit(toString(Seq_trl),'')	
+    stops=which( Seq_trl_string[[1]]=='*')
   		
 
-			######
-			ref=rownames(X_Alignment)[1]
-      		Seqref=toString(unmasked(X_Alignment)[[ref]] )
+	######
+	ref=rownames(X_Alignment)[1]
+    Seqref=toString(unmasked(X_Alignment)[[ref]] )
 
-      		Seqref_string=strsplit(toString(Seqref),'')
-      		xref=table(Seqref_string)
-      		gapsref=xref['-']
-      		if(is.na(gapsref)){gapsref=0}
-      		Seq_nogapsref=gsub('-','',Seqref)
-      		xref=table(strsplit(Seq_nogapsref,''))
-      		xORFref=findORFsinSeq(Seq_nogapsref)
-			bestORF=xORFref[ xORFref\$orflengths==max(xORFref\$orflengths),]
-			ref_trans=Biostrings::translate(DNAString(substring(Seq_nogapsref, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
-      		Seq_trlref=ref_trans
-      		length_Seqtrlref=length(ref_trans)
-      		Seq_trl_stringref=strsplit(toString(Seq_trlref),'')	
-      		stopsref=which( Seq_trl_stringref[[1]]=='*')
+    Seqref_string=strsplit(toString(Seqref),'')
+    xref=table(Seqref_string)
+    gapsref=xref['-']
+    if(is.na(gapsref)){gapsref=0}
+    Seq_nogapsref=gsub('-','',Seqref)
+    xref=table(strsplit(Seq_nogapsref,''))
+    xORFref=findORFsinSeq(Seq_nogapsref)
+	bestORF=xORFref[ xORFref\$orflengths==max(xORFref\$orflengths),]
+	ref_trans=Biostrings::translate(DNAString(substring(Seq_nogapsref, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
+    Seq_trlref=ref_trans
+    length_Seqtrlref=length(ref_trans)
+    Seq_trl_stringref=strsplit(toString(Seq_trlref),'')	
+    stopsref=which( Seq_trl_stringref[[1]]=='*')
 
 ######	
-			Align=data.frame(Ref=c(unlist(Seqref_string)),Query=c(unlist(Seq_string)))
-				Align\$position=c(1:dim(Align)[1])
+	Align=data.frame(Ref=c(unlist(Seqref_string)),Query=c(unlist(Seq_string)))
+	Align\$position=c(1:dim(Align)[1])
 
 	
-			Align\$Ref=as.character(Align\$Ref)
-			Align\$Query=as.character(Align\$Query)
-			Align\$mutation=paste(Align\$Ref,Align\$position,Align\$Query,sep='')
-			Align\$Change='identical'
-			Align\$Change[ Align\$Query!=Align\$Ref ]='SNP'
-			Align\$Change[ Align\$Query=='-' | Align\$Query=='N' ]='GAP'
-			Align\$Change[ Align\$Ref=='-' | Align\$Ref=='N' ]='INSERTION'
+	Align\$Ref=as.character(Align\$Ref)
+	Align\$Query=as.character(Align\$Query)
+	Align\$mutation=paste(Align\$Ref,Align\$position,Align\$Query,sep='')
+	Align\$Change='identical'
+	Align\$Change[ Align\$Query!=Align\$Ref ]='SNP'
+	Align\$Change[ Align\$Query=='-' | Align\$Query=='N' ]='GAP'
+	Align\$Change[ Align\$Ref=='-' | Align\$Ref=='N' ]='INSERTION'
 			
 			
-			changesSNPs=Align[Align\$Change=='SNP',]
-			changesGAPs=Align[Align\$Change=='GAP',]
-			changesINSERTION=Align[Align\$Change=='INSERTION',]
-			SNPs=paste(changesSNPs\$mutation,collapse=',')
-			GAPs=paste(changesGAPs\$mutation,collapse=',')
-			INSERTION=paste(changesINSERTION\$mutation,collapse=',')
+	changesSNPs=Align[Align\$Change=='SNP',]
+	changesGAPs=Align[Align\$Change=='GAP',]
+	changesINSERTION=Align[Align\$Change=='INSERTION',]
+	SNPs=paste(changesSNPs\$mutation,collapse=',')
+	GAPs=paste(changesGAPs\$mutation,collapse=',')
+	INSERTION=paste(changesINSERTION\$mutation,collapse=',')
 
-			if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-')){Ncopies=1}else{Ncopies=3}		
-			if(any(xx[,2]=='-') && any(xx[,3]=='-') ){Ncopies=1}else{Ncopies=2}		
+	if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-')){Ncopies=1}else{Ncopies=3}		
+	if(any(xx[,2]=='-') && any(xx[,3]=='-') ){Ncopies=1}else{Ncopies=2}		
 			
 }
 
@@ -1729,17 +1181,17 @@ k=0
  		#print('5 sequences')
  
   sequences=length(mySequences\@ranges\@NAMES)
- 	  xx <- as.data.frame(matrix(ncol=sequences, nrow=myFirstAlignment\@unmasked\@ranges\@width[1]))
- 
-	  names=matrix(ncol=sequences, nrow=1)
+	xx <- as.data.frame(matrix(ncol=sequences, nrow=myFirstAlignment\@unmasked\@ranges\@width[1]))
+	names=matrix(ncol=sequences, nrow=1)
 	 
-    		for( i in mySequences\@ranges\@NAMES){ 
+    for( i in mySequences\@ranges\@NAMES){ 
         	x=c(unlist(strsplit(toString(unmasked(myFirstAlignment)[[i]]),'')))
         	k=k+1
     		xx[,k]=x
         	names[,k]=i
     		}
-    				xx\$consensus=apply(xx, 1, function(x) {
+    
+	xx\$consensus=apply(xx, 1, function(x) {
 						y=unique(x[-1])	
     					y=y[y!='-']	
 						if(length(y)==0){y='-'}
@@ -1751,86 +1203,83 @@ k=0
 						return(y)})
 
   		
-  		conSeq=paste(xx\$consensus,collapse='')
-		conSeq=gsub('-','',conSeq)
-  		consensusSeq=DNAStringSet(conSeq)
-  		consensusSeq\@ranges\@NAMES=mySequences\@ranges\@NAMES[2]
+  	conSeq=paste(xx\$consensus,collapse='')
+	conSeq=gsub('-','',conSeq)
+  	consensusSeq=DNAStringSet(conSeq)
+  	consensusSeq\@ranges\@NAMES=mySequences\@ranges\@NAMES[2]
   		
-  		ref=DNAStringSet(mySequences[[1]])
-  		ref\@ranges\@NAMES=mySequences\@ranges\@NAMES[1]
+  	ref=DNAStringSet(mySequences[[1]])
+  	ref\@ranges\@NAMES=mySequences\@ranges\@NAMES[1]
   		
-  		myAlignment=invisible(Alignment(c(ref,consensusSeq)))
-		myAlignment_reverse=Alignment(c(reverseComplement(ref),consensusSeq))
+  	myAlignment=invisible(Alignment(c(ref,consensusSeq)))
+	myAlignment_reverse=Alignment(c(reverseComplement(ref),consensusSeq))
 
- 		FA=msaConsensusSequence(myAlignment)
- 		FAR=msaConsensusSequence(myAlignment_reverse)
+ 	FA=msaConsensusSequence(myAlignment)
+ 	FAR=msaConsensusSequence(myAlignment_reverse)
 
-		Consensus=str_count(FA, pattern = '\\\\?')
- 		Consensus_reverse=str_count(FAR, pattern ='\\\\?')
+	Consensus=str_count(FA, pattern = '\\\\?')
+ 	Consensus_reverse=str_count(FAR, pattern ='\\\\?')
 	
-		if(Consensus<Consensus_reverse){Alignment=myAlignment}else{myAlignment=myAlignment_reverse}
+	if(Consensus<Consensus_reverse){Alignment=myAlignment}else{myAlignment=myAlignment_reverse}
        
-       X_Alignment=myAlignment
+    X_Alignment=myAlignment
 
-			query=rownames(X_Alignment)[2]
-      		Seq=toString(unmasked(X_Alignment)[[query]] )
-      		Seq_string=strsplit(toString(Seq),'')
-  			x=table(strsplit(Seq,''))
-  			gaps=x['-']
-  			if(is.na(gaps)){gaps=0}
-  			Seq_nogaps=gsub('-','',Seq)
-  			x=table(strsplit(Seq_nogaps,''))
-  			xORF=findORFsinSeq(Seq_nogaps)
-  			bestORF=xORF[ xORF\$orflengths==max(xORF\$orflengths),]
-			query_trans=Biostrings::translate(DNAString(substring(Seq_nogaps, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
-      		Seq_trl=query_trans
-  			length_Seqtrl=length(Seq_trl)
-      		Seq_trl_string=strsplit(toString(Seq_trl),'')	
-      		stops=which( Seq_trl_string[[1]]=='*')
-  		
+	query=rownames(X_Alignment)[2]
+    Seq=toString(unmasked(X_Alignment)[[query]] )
+    Seq_string=strsplit(toString(Seq),'')
+  	x=table(strsplit(Seq,''))
+  	gaps=x['-']
+  	if(is.na(gaps)){gaps=0}
+  	Seq_nogaps=gsub('-','',Seq)
+  	x=table(strsplit(Seq_nogaps,''))
+  	xORF=findORFsinSeq(Seq_nogaps)
+  	bestORF=xORF[ xORF\$orflengths==max(xORF\$orflengths),]
+	query_trans=Biostrings::translate(DNAString(substring(Seq_nogaps, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
+    Seq_trl=query_trans
+  	length_Seqtrl=length(Seq_trl)
+    Seq_trl_string=strsplit(toString(Seq_trl),'')	
+    stops=which( Seq_trl_string[[1]]=='*')
 
-			######
-			ref=rownames(X_Alignment)[1]
-      		Seqref=toString(unmasked(X_Alignment)[[ref]] )
-
-      		Seqref_string=strsplit(toString(Seqref),'')
-      		xref=table(Seqref_string)
-      		gapsref=xref['-']
-      		if(is.na(gapsref)){gapsref=0}
-      		Seq_nogapsref=gsub('-','',Seqref)
-      		xref=table(strsplit(Seq_nogapsref,''))
-      		xORFref=findORFsinSeq(Seq_nogapsref)
-			bestORF=xORFref[ xORFref\$orflengths==max(xORFref\$orflengths),]
-			ref_trans=Biostrings::translate(DNAString(substring(Seq_nogapsref, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
-      		Seq_trlref=ref_trans
-      		length_Seqtrlref=length(ref_trans)
-      		Seq_trl_stringref=strsplit(toString(Seq_trlref),'')	
-      		stopsref=which( Seq_trl_stringref[[1]]=='*')
+	######
+	ref=rownames(X_Alignment)[1]
+    Seqref=toString(unmasked(X_Alignment)[[ref]] )
+    Seqref_string=strsplit(toString(Seqref),'')
+    xref=table(Seqref_string)
+    gapsref=xref['-']
+    if(is.na(gapsref)){gapsref=0}
+    Seq_nogapsref=gsub('-','',Seqref)
+    xref=table(strsplit(Seq_nogapsref,''))
+    xORFref=findORFsinSeq(Seq_nogapsref)
+	bestORF=xORFref[ xORFref\$orflengths==max(xORFref\$orflengths),]
+	ref_trans=Biostrings::translate(DNAString(substring(Seq_nogapsref, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
+    Seq_trlref=ref_trans
+    length_Seqtrlref=length(ref_trans)
+    Seq_trl_stringref=strsplit(toString(Seq_trlref),'')	
+    stopsref=which( Seq_trl_stringref[[1]]=='*')
 
 ######	
-			Align=data.frame(Ref=c(unlist(Seqref_string)),Query=c(unlist(Seq_string)))
-				Align\$position=c(1:dim(Align)[1])
+	Align=data.frame(Ref=c(unlist(Seqref_string)),Query=c(unlist(Seq_string)))
+	Align\$position=c(1:dim(Align)[1])
 
 	
-			Align\$Ref=as.character(Align\$Ref)
-			Align\$Query=as.character(Align\$Query)
-			Align\$mutation=paste(Align\$Ref,Align\$position,Align\$Query,sep='')
-			Align\$Change='identical'
-			Align\$Change[ Align\$Query!=Align\$Ref ]='SNP'
-			Align\$Change[ Align\$Query=='-' | Align\$Query=='N' ]='GAP'
-			Align\$Change[ Align\$Ref=='-' | Align\$Ref=='N' ]='INSERTION'
+	Align\$Ref=as.character(Align\$Ref)
+	Align\$Query=as.character(Align\$Query)
+	Align\$mutation=paste(Align\$Ref,Align\$position,Align\$Query,sep='')
+	Align\$Change='identical'
+	Align\$Change[ Align\$Query!=Align\$Ref ]='SNP'
+	Align\$Change[ Align\$Query=='-' | Align\$Query=='N' ]='GAP'
+	Align\$Change[ Align\$Ref=='-' | Align\$Ref=='N' ]='INSERTION'
+					
+	changesSNPs=Align[Align\$Change=='SNP',]
+	changesGAPs=Align[Align\$Change=='GAP',]
+	changesINSERTION=Align[Align\$Change=='INSERTION',]
+	SNPs=paste(changesSNPs\$mutation,collapse=',')
+	GAPs=paste(changesGAPs\$mutation,collapse=',')
+	INSERTION=paste(changesINSERTION\$mutation,collapse=',')
 			
-			
-			changesSNPs=Align[Align\$Change=='SNP',]
-			changesGAPs=Align[Align\$Change=='GAP',]
-			changesINSERTION=Align[Align\$Change=='INSERTION',]
-			SNPs=paste(changesSNPs\$mutation,collapse=',')
-			GAPs=paste(changesGAPs\$mutation,collapse=',')
-			INSERTION=paste(changesINSERTION\$mutation,collapse=',')
-			
-			if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-') && any(xx[,5]=='-')){Ncopies=1}else{Ncopies=4}	
-			if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-' )){Ncopies=1}else{Ncopies=3}		
-			if(any(xx[,2]=='-') && any(xx[,3]=='-') ){Ncopies=1}else{Ncopies=2}		
+	if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-') && any(xx[,5]=='-')){Ncopies=1}else{Ncopies=4}	
+	if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-' )){Ncopies=1}else{Ncopies=3}		
+	if(any(xx[,2]=='-') && any(xx[,3]=='-') ){Ncopies=1}else{Ncopies=2}		
 
 }
 
@@ -1838,18 +1287,18 @@ k=0
  if(nSeq==6){
  		#print('6 sequences')
  
-  sequences=length(mySequences\@ranges\@NAMES)
- 	  xx <- as.data.frame(matrix(ncol=sequences, nrow=myFirstAlignment\@unmasked\@ranges\@width[1]))
- 
-	  names=matrix(ncol=sequences, nrow=1)
+	sequences=length(mySequences\@ranges\@NAMES)
+	xx <- as.data.frame(matrix(ncol=sequences, nrow=myFirstAlignment\@unmasked\@ranges\@width[1]))
+	names=matrix(ncol=sequences, nrow=1)
 	 
-    		for( i in mySequences\@ranges\@NAMES){ 
+    for( i in mySequences\@ranges\@NAMES){ 
         	x=c(unlist(strsplit(toString(unmasked(myFirstAlignment)[[i]]),'')))
         	k=k+1
     		xx[,k]=x
         	names[,k]=i
     		}
-    				xx\$consensus=apply(xx, 1, function(x) {
+    
+	xx\$consensus=apply(xx, 1, function(x) {
 						y=unique(x[-1])	
     					y=y[y!='-']	
 						if(length(y)==0){y='-'}
@@ -1862,86 +1311,83 @@ k=0
 						return(y)})
 
   		
-  		conSeq=paste(xx\$consensus,collapse='')
-		conSeq=gsub('-','',conSeq)
-  		consensusSeq=DNAStringSet(conSeq)
-  		consensusSeq\@ranges\@NAMES=mySequences\@ranges\@NAMES[2]
-  		ref=DNAStringSet(mySequences[[1]])
-  		ref\@ranges\@NAMES=mySequences\@ranges\@NAMES[1]
+  	conSeq=paste(xx\$consensus,collapse='')
+	conSeq=gsub('-','',conSeq)
+  	consensusSeq=DNAStringSet(conSeq)
+  	consensusSeq\@ranges\@NAMES=mySequences\@ranges\@NAMES[2]
+  	ref=DNAStringSet(mySequences[[1]])
+  	ref\@ranges\@NAMES=mySequences\@ranges\@NAMES[1]
   		
-  		myAlignment=invisible(Alignment(c(ref,consensusSeq)))
-		myAlignment_reverse=Alignment(c(reverseComplement(ref),consensusSeq))
+  	myAlignment=invisible(Alignment(c(ref,consensusSeq)))
+	myAlignment_reverse=Alignment(c(reverseComplement(ref),consensusSeq))
 
- 		FA=msaConsensusSequence(myAlignment)
- 		FAR=msaConsensusSequence(myAlignment_reverse)
+ 	FA=msaConsensusSequence(myAlignment)
+ 	FAR=msaConsensusSequence(myAlignment_reverse)
 
-		Consensus=str_count(FA, pattern = '\\\\?')
- 		Consensus_reverse=str_count(FAR, pattern ='\\\\?')
+	Consensus=str_count(FA, pattern = '\\\\?')
+ 	Consensus_reverse=str_count(FAR, pattern ='\\\\?')
 	
-		if(Consensus<Consensus_reverse){Alignment=myAlignment}else{myAlignment=myAlignment_reverse}
-       
-       X_Alignment=myAlignment
+	if(Consensus<Consensus_reverse){Alignment=myAlignment}else{myAlignment=myAlignment_reverse}
+    X_Alignment=myAlignment
 
-			query=rownames(X_Alignment)[2]
-      		Seq=toString(unmasked(X_Alignment)[[query]] )
-      		Seq_string=strsplit(toString(Seq),'')
-  			x=table(strsplit(Seq,''))
-  			gaps=x['-']
-  			if(is.na(gaps)){gaps=0}
-  			Seq_nogaps=gsub('-','',Seq)
-  			x=table(strsplit(Seq_nogaps,''))
-  			xORF=findORFsinSeq(Seq_nogaps)
-  			bestORF=xORF[ xORF\$orflengths==max(xORF\$orflengths),]
-			query_trans=Biostrings::translate(DNAString(substring(Seq_nogaps, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
-      		Seq_trl=query_trans
-  			length_Seqtrl=length(Seq_trl)
-      		Seq_trl_string=strsplit(toString(Seq_trl),'')	
-      		stops=which( Seq_trl_string[[1]]=='*')
+	query=rownames(X_Alignment)[2]
+    Seq=toString(unmasked(X_Alignment)[[query]] )
+    Seq_string=strsplit(toString(Seq),'')
+  	x=table(strsplit(Seq,''))
+  	gaps=x['-']
+  	if(is.na(gaps)){gaps=0}
+  	Seq_nogaps=gsub('-','',Seq)
+  	x=table(strsplit(Seq_nogaps,''))
+  	xORF=findORFsinSeq(Seq_nogaps)
+  	bestORF=xORF[ xORF\$orflengths==max(xORF\$orflengths),]
+	query_trans=Biostrings::translate(DNAString(substring(Seq_nogaps, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
+    Seq_trl=query_trans
+  	length_Seqtrl=length(Seq_trl)
+    Seq_trl_string=strsplit(toString(Seq_trl),'')	
+    stops=which( Seq_trl_string[[1]]=='*')
   		
 
-			######
-			ref=rownames(X_Alignment)[1]
-      		Seqref=toString(unmasked(X_Alignment)[[ref]] )
+	######
+	ref=rownames(X_Alignment)[1]
+    Seqref=toString(unmasked(X_Alignment)[[ref]] )
 
-      		Seqref_string=strsplit(toString(Seqref),'')
-      		xref=table(Seqref_string)
-      		gapsref=xref['-']
-      		if(is.na(gapsref)){gapsref=0}
-      		Seq_nogapsref=gsub('-','',Seqref)
-      		xref=table(strsplit(Seq_nogapsref,''))
-      		xORFref=findORFsinSeq(Seq_nogapsref)
-			bestORF=xORFref[ xORFref\$orflengths==max(xORFref\$orflengths),]
-			ref_trans=Biostrings::translate(DNAString(substring(Seq_nogapsref, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
-      		Seq_trlref=ref_trans
-      		length_Seqtrlref=length(ref_trans)
-      		Seq_trl_stringref=strsplit(toString(Seq_trlref),'')	
-      		stopsref=which( Seq_trl_stringref[[1]]=='*')
+    Seqref_string=strsplit(toString(Seqref),'')
+    xref=table(Seqref_string)
+    gapsref=xref['-']
+    if(is.na(gapsref)){gapsref=0}
+    Seq_nogapsref=gsub('-','',Seqref)
+	xref=table(strsplit(Seq_nogapsref,''))
+    xORFref=findORFsinSeq(Seq_nogapsref)
+	bestORF=xORFref[ xORFref\$orflengths==max(xORFref\$orflengths),]
+	ref_trans=Biostrings::translate(DNAString(substring(Seq_nogapsref, bestORF\$orfstart,bestORF\$orfstops)),if.fuzzy.codon='solve')
+    Seq_trlref=ref_trans
+    length_Seqtrlref=length(ref_trans)
+    Seq_trl_stringref=strsplit(toString(Seq_trlref),'')	
+    stopsref=which( Seq_trl_stringref[[1]]=='*')
 
 ######	
-			Align=data.frame(Ref=c(unlist(Seqref_string)),Query=c(unlist(Seq_string)))
-				Align\$position=c(1:dim(Align)[1])
-
-	
-			Align\$Ref=as.character(Align\$Ref)
-			Align\$Query=as.character(Align\$Query)
-			Align\$mutation=paste(Align\$Ref,Align\$position,Align\$Query,sep='')
-			Align\$Change='identical'
-			Align\$Change[ Align\$Query!=Align\$Ref ]='SNP'
-			Align\$Change[ Align\$Query=='-' | Align\$Query=='N' ]='GAP'
-			Align\$Change[ Align\$Ref=='-' | Align\$Ref=='N' ]='INSERTION'
+	Align=data.frame(Ref=c(unlist(Seqref_string)),Query=c(unlist(Seq_string)))
+	Align\$position=c(1:dim(Align)[1])
+	Align\$Ref=as.character(Align\$Ref)
+	Align\$Query=as.character(Align\$Query)
+	Align\$mutation=paste(Align\$Ref,Align\$position,Align\$Query,sep='')
+	Align\$Change='identical'
+	Align\$Change[ Align\$Query!=Align\$Ref ]='SNP'
+	Align\$Change[ Align\$Query=='-' | Align\$Query=='N' ]='GAP'
+	Align\$Change[ Align\$Ref=='-' | Align\$Ref=='N' ]='INSERTION'
 			
 			
-			changesSNPs=Align[Align\$Change=='SNP',]
-			changesGAPs=Align[Align\$Change=='GAP',]
-			changesINSERTION=Align[Align\$Change=='INSERTION',]
-			SNPs=paste(changesSNPs\$mutation,collapse=',')
-			GAPs=paste(changesGAPs\$mutation,collapse=',')
-			INSERTION=paste(changesINSERTION\$mutation,collapse=',')
+	changesSNPs=Align[Align\$Change=='SNP',]
+	changesGAPs=Align[Align\$Change=='GAP',]
+	changesINSERTION=Align[Align\$Change=='INSERTION',]
+	SNPs=paste(changesSNPs\$mutation,collapse=',')
+	GAPs=paste(changesGAPs\$mutation,collapse=',')
+	INSERTION=paste(changesINSERTION\$mutation,collapse=',')
 			
-			if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-') && any(xx[,5]=='-') && any(xx[,6]=='-')){Ncopies=1}else{Ncopies=5}
-			if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-') && any(xx[,5]=='-')){Ncopies=1}else{Ncopies=4}	
-			if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-' )){Ncopies=1}else{Ncopies=3}		
-			if(any(xx[,2]=='-') && any(xx[,3]=='-') ){Ncopies=1}else{Ncopies=2}		
+	if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-') && any(xx[,5]=='-') && any(xx[,6]=='-')){Ncopies=1}else{Ncopies=5}
+	if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-') && any(xx[,5]=='-')){Ncopies=1}else{Ncopies=4}	
+	if(any(xx[,2]=='-') && any(xx[,3]=='-') && any(xx[,4]=='-' )){Ncopies=1}else{Ncopies=3}		
+	if(any(xx[,2]=='-') && any(xx[,3]=='-') ){Ncopies=1}else{Ncopies=2}		
 
 }
 
@@ -2238,36 +1684,29 @@ SeqQueryGenomeName=paste(GenomeFile,query,sep='::')
 
 
 if ( $genes_type eq 'prot'){
-
-$R_file="$results_folder/scripts/curatingAlignments.r";
-
-		open R_SCRIPT,">$R_file" or die "Cannot write  $R_file script\n";
-
-        	 $R_script= "
-        	
-        	 rm(list=ls()); 
-        	 
-        	options(stringsAsFactors = FALSE)
-        	args = commandArgs(trailingOnly=TRUE)
-			file=args[1]
-			genename=args[2]
-			out1=args[3]
-			out2=args[4]
-			out3=args[5]
-			setwd(dirname(file))
-			#print(getwd())
-				Sys.setenv('R_MAX_VSIZE'=32000000000)
-
-				suppressMessages(suppressWarnings(library(msa)))
-				suppressMessages(suppressWarnings(library(reshape2)))
-				suppressMessages(suppressWarnings(library(seqinr)))
-				 suppressMessages(suppressWarnings(library( Biostrings)))
-				options(warn=-1)
-				    library(stringr)
-					##Functions
+	$R_file="$results_folder/scripts/curatingAlignments.r";
+	open R_SCRIPT,">$R_file" or die "Cannot write  $R_file script\n";
+	$R_script= "
+rm(list=ls()); 
+Sys.setenv('R_MAX_VSIZE'=32000000000)
+suppressMessages(suppressWarnings(library(msa)))
+suppressMessages(suppressWarnings(library(reshape2)))
+suppressMessages(suppressWarnings(library(seqinr)))
+suppressMessages(suppressWarnings(library( Biostrings)))
+suppressMessages(suppressWarnings(library(stringr)))
+options(warn=-1)
+options(stringsAsFactors = FALSE)
+args = commandArgs(trailingOnly=TRUE)
+file=args[1]
+genename=args[2]
+out1=args[3]
+out2=args[4]
+out3=args[5]
+setwd(dirname(file))
+#print(getwd())
+				
+##Functions
 	
-	
-
 findPotentialStartsAndStops <- function(DNA_string)
   { positions =c()
    	types =c()
@@ -3007,46 +2446,17 @@ SeqQueryGenomeName=paste(GenomeFile,query,sep='::')
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-sub sub7{
+sub sub11_cleanup_compress{
 my $gene= shift;
 	my $genename=basename($gene);
 	$genename=~s/.fasta$//g;
-	my $outAlign=$dirresults."/".$genename.".nt_alignment.fasta";
-	my $outAlign_forR=$dirresults."/".$genename.".nt_alignment.fasta_forR";
-	my $outAlign_forRR=$dirresults."/".$genename.".nt_alignment.fasta_forR_forR";
-
-
-	my $cmd_align="cat ".$dirresults."/".$genename."*nt_alignment.fasta.tmp >$outAlign";
+	my $outAlign=$dirresults."/".$genename."_alignment.fasta";
+	my $outAlign_forR=$dirresults."/".$genename."_alignment.fasta_forR";
+	my $outAlign_forRR=$dirresults."/".$genename."_alignment.fasta_forR_forR";
+	my $cmd_align="cat ".$dirresults."/".$genename."*_alignment.fasta.tmp >$outAlign";
 	#print ">>>>>>>>>>>>>$cmd_align\n";
 	system($cmd_align);
 
-	
-	
-	
 	my $cmd_sed="sed 's/-//g' $outAlign >$outAlign_forRR";
 	my $cmd_sed1="sed 's/:/-/g' $outAlign_forRR >$outAlign_forR";
 
@@ -3055,21 +2465,19 @@ my $gene= shift;
 	
 	$R_file=$outAlign."temp.R";
 	
-		open R_SCRIPT,">$R_file" or die "Cannot write $R_file script\n";
+	open R_SCRIPT,">$R_file" or die "Cannot write $R_file script\n";
 
-         $R_script= "
-		rm(list=ls()); 
-					
-		Sys.setenv('R_MAX_VSIZE'=32000000000)
-
-				suppressMessages(suppressWarnings(library(msa)))
-				suppressMessages(suppressWarnings(library(reshape2)))
-				options(warn=-1)
-				library(stringr)
-
-					##Functions
+$R_script= "
+rm(list=ls()); 
+Sys.setenv('R_MAX_VSIZE'=32000000000)
+suppressMessages(suppressWarnings(library(msa)))
+suppressMessages(suppressWarnings(library(reshape2)))
+suppressMessages(suppressWarnings(library(stringr)))
+options(warn=-1)
+				
+##Functions
 	
-			seq2Fasta <- function(seq,name,filename) 
+seq2Fasta <- function(seq,name,filename) 
 				{
   						sink(filename,append=TRUE)
     					cat(paste0('>', name),file=filename,append=TRUE)
@@ -3160,10 +2568,54 @@ if(nSeq>1){
 	}
 	
 
+######################################################>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PROGRAM RUNS HERE <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<##########################################################
 
 
-###########################PROGRAM RUNS HERE###############################
+#######################################################################################################################################################################################################################################################################################################################################################################
+#copy input files 
+foreach my $files(@seq){ copy($files,$dirModifiedGenomes)};
+foreach my $files(@genes){ copy($files,$dirModifiedGenes)};
 
+opendir(my $dir_open_seq, $dirModifiedGenomes) or die "Cannot open directory $dirModifiedGenomes: $!";
+my @seq_array = grep { -T "$dirModifiedGenomes/$_" } readdir $dir_open_seq;
+#@seq = readdir $dir_open_seq;
+closedir $dir_open_seq;
+
+opendir(my $dir_open_genes, $dirModifiedGenes) or die "Cannot open directory $dirModifiedGenes: $!";
+my @genes_array = grep { -T "$dirModifiedGenes/$_" } readdir $dir_open_genes;
+#@genes = readdir $dir_open_genes;
+closedir $dir_open_genes;
+
+
+
+#######################################################################################################################################################################################################################################################################################################################################################################
+
+
+#######################################################################################################################################################################################################################################################################################################################################################################
+#create tmp output file
+my $out_alignment_description=$dirresults."/out.alignments.description.txt";
+open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
+print OUT "Gene\tRef\tRef_length_nt\tRef_length_AA\tRef_stopCodon\tGenomeFile\tQuery\tStart\tEnd\tStrand\tQuery_length_nt\tQuery_length_AA\tnt_gaps\tstopCodon\tSNPs\tGAPs\tINSERTION\tlocation\tclassification\tPercentageSimilarityAA\tPercentageSimilarityDNA\tN.copies\n";
+close OUT;
+#######################################################################################################################################################################################################################################################################################################################################################################
+
+print "
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+\t\t READING AND MODIFYING GENES
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
+  
+afork(@genes_array,$cores,\&sub1_genemodification);
+#=debug
+
+print "
+-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+
+\t\t DONE READING AND MODIFYING GENES
+  
+-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
+####################################################################################################################################################################################################################
 print "
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -3171,18 +2623,32 @@ print "
 
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
   
- afork(@genes,$cores,\&subgene);
-  
+afork(@genes_array,$cores,\&sub2_gene_makeblastdb);
+
 print "
 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 
 \t\t DONE CREATING DATABASES FROM GENES OF INTEREST
   
 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
+####################################################################################################################################################################################################################
+print "
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+\t\t CREATING IMPUT FOLDERS WITH MODIFIED INPUTS
 
-if ($species eq "SI"){ 
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
  
+afork(@seq_array,$cores,\&sub3_chrplas_folders);
+
+print "
+-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+
+\t\t DONE CREATING IMPUT FOLDERS WITH MODIFIED INPUTS
+  
+-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
+
+####################################################################################################################################################################################################################
  
    print "
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -3190,12 +2656,12 @@ if ($species eq "SI"){
 \t\t PREDICTING PLASMID AND CHROMOSOMES FOR ALL GENOMES
 
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
- 
- 
- 
- afork(@seq,$cores,\&sub0);
- 
- print "
+
+ if($plasmid_pred eq "SI"){
+	 afork(@seq_array,$cores,\&sub4_plasclass_method);
+	 afork(@seq_array,$cores,\&sub5_plasmid_extraction);
+	 afork(@seq_array,$cores,\&sub6_samtools);
+	  print "
 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 
 \t\t DONE PREDICTING PLASMID AND CHROMOSOMES FOR ALL GENOMES\n
@@ -3203,168 +2669,86 @@ if ($species eq "SI"){
 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
  
  
- }else{ 
-
+ 	}else{ 
   print "
 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 
-\t\t NO PREDICTION OF PLASMIDS WILL BE PERFORMED\n
+\t\t NO PREDICTION OF PLASMIDS WAS PERFORMED\n
+set -p option if you want to predict plasmids in your assembly
   
 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
  
  }
-
-
-
-
- if ($species eq "NO"){ 
- 
- afork(@seq,$cores,\&sub1_chr)}else{ 
-
- afork(@seq,$cores,\&sub1);
- 
- }
-
-
-
-
-
- if ($species eq "NO"){ 
+####################################################################################################################################################################################################################
    print "
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-\t\t GENES PREDICTION FOR CHROMOSOME 
+\t\t PREDICTING GENES FROM GENOMES 
 
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
- opendir(BIN, $diroriginalgenomes) or die "Can't open $diroriginalgenomes: $!";
- @seq = grep { -T "$diroriginalgenomes/$_" } readdir BIN;
-  afork(@seq,$cores,\&sub2_chr);
-    print "
--.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 
-\t\t DONE GENES PREDICTION FOR CHROMOSOME 
+ afork(@seq_array,$cores,\&sub7_prodigal);
   
--.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
-  
-  
- }else{
-   print "
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-\t\t EXTRACTING GENES FROM GENOMES 
-
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
- 
- 
- afork(@seq,$cores,\&sub2);
- 
- 
- print "
--.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-
-\t\t DONE EXTRACTING GENES FROM GENOMES 
-  
--.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
- 
- }
-#normal(@seq,\&sub2);
-
-
-
-
- if ($species eq "NO"){ 
-
-  opendir(BIN, $diroriginalgenomes) or die "Can't open $diroriginalgenomes: $!";
- @seq = grep { -T "$diroriginalgenomes/$_" } readdir BIN;
- 
- afork(@seq,$cores,\&sub3_chr);
- 
-
- 
- }else{
- 
-   print "
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-\t\t GENES PREDICTION FOR CHROMOSOME AND PLASMIDS  
-
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
-afork(@seq,$cores,\&sub3);
-
- print "
--.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-
-\t\t DONE GENES PREDICTION FOR CHROMOSOME AND PLASMIDS 
-  
--.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
- }
-
-
-
-    print "
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-\t\t MODIFICATION OF PRODIGAL OUTPUTS
-
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
- if ($species eq "NO"){ 
-  opendir(BIN, $diroriginalgenomes) or die "Can't open $diroriginalgenomes: $!";
- @seq = grep { -T "$diroriginalgenomes/$_" } readdir BIN;
- afork(@seq,$cores,\&sub4_chr)}else{afork(@seq,$cores,\&sub4);}
-  
-
 print "
 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 
-\t\t DONE  MODIFICATION OF PRODIGAL OUTPUTS
+\t\t DONE PREDICTING GENES FROM GENOMES 
   
 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
-
- print "
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-\t\t BLASTING GENES 
-
-
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
  
- if ($species eq "NO"){ opendir(BIN, $diroriginalgenomes) or die "Can't open $diroriginalgenomes: $!";
- @seq = grep { -T "$diroriginalgenomes/$_" } readdir BIN;
- afork(@seq,$cores,\&sub5_chr);}else{afork(@seq,$cores,\&sub5);}
- 
- if ($species eq "NO"){ opendir(BIN, $diroriginalgenomes) or die "Can't open $diroriginalgenomes: $!";
- @seq = grep { -T "$diroriginalgenomes/$_" } readdir BIN;
- afork(@seq,$cores,\&sub5_1chr);}else{afork(@seq,$cores,\&sub5_1);}
- 
-
-print "
--.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-
-\t\t DONE BLASTING GENES  
-  
--.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
-
+####################################################################################################################################################################################################################
    print "
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-\t\t GENERATING CURATED ALIGNMENTS AND DESCRIPTIVE TABLE
+\t\t FORMATING
 
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
 
-#normal(@seq,\&sub6);
-if ($species eq "NO"){ opendir(BIN, $diroriginalgenomes) or die "Can't open $diroriginalgenomes: $!";
- @seq = grep { -T "$diroriginalgenomes/$_" } readdir BIN;
- afork(@seq,$cores,\&sub6_chr);}else{afork(@seq,$cores,\&sub6)}
-
+ afork(@seq_array,$cores,\&sub8_modifed_header_chrplas);
+  
 print "
 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 
-\t\t DONE GENERATING CURATED ALIGNMENTS AND DESCRIPTIVE TABLE  
+\t\t DONE  FORMATING
   
 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
 
 
-###########################CLEAN UP AND COMPRESS###############################
+
+####################################################################################################################################################################################################################
+   print "
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+\t\t BLASTING
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
+ 
+ afork(@seq_array,$cores,\&sub9_blast);
+  
+print "
+-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+
+\t\t DONE BLASTING
+  
+-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
+
+####################################################################################################################################################################################################################
+   print "
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+\t\t PREDICTING GENES FROM GENOMES 
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
+
+ afork(@seq_array,$cores,\&sub10_curate_alignment);
+  
+print "
+-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+
+\t\t DONE PREDICTING GENES FROM GENOMES 
+  
+-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
+#####################################>>>>>>>>>>>>>>>>>> CLEAN UP AND COMPRESS <<<<<<<<<<<<<<<<<<<<<<################################################
 #normal(@seq);
 	
 	
@@ -3375,7 +2759,7 @@ print "
 
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
 
- afork(@genes,$cores,\&sub7);
+ afork(@genes_array,$cores,\&sub11_cleanup_compress);
 
 print "
 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -3434,7 +2818,7 @@ print "
 
  	# Do stuff
 
-system($cmd_fai);
+#system($cmd_fai);
 system("rm $diroutput/*/*fai");
 
  
@@ -3444,7 +2828,7 @@ print "Execution time: $duration s\n";
 
 	
 
- 
+ #=
  
  
 
