@@ -32,7 +32,7 @@ conda activate fromAssembly2feature
 
 ## INSTALL 
 ```
-git clone https://github.com/LPerlaza/Assembly2Gene.git
+git clone git@github.com:LPerlaza/fromAssembly2Feature.git
 cd Assembly2Gene
 chmod a+x fromAssembly2gene.pl
 ```	 		
