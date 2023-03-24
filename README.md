@@ -14,7 +14,7 @@ These scripts detect features of interest in prokaryotic assemblies. Each perl s
 Please make sure you have the following dependencies in your computer:											
 
 - Programs in $PATH: Blast, prodigal and samtools. 
-- R packages: "msa", "reshape2", "Biostrings", "seqinr"
+- R packages: [msa](https://bioconductor.org/packages/release/bioc/html/msa.html), [reshape2](https://cran.r-project.org/web/packages/reshape2/index.html), [Biostrings](https://bioconductor.org/packages/release/bioc/html/Biostrings.html), [seqinr](https://cran.r-project.org/web/packages/seqinr/index.html)
 
 optional (only if you want to predict plasmids)
 
@@ -25,8 +25,24 @@ optional (only if you want to predict plasmids)
 You can create a conda environment with all the dependencies:
 
 ```
-conda create -c bioconda -c conda-forge --name fromAssembly2feature prodigal samtools blast plasclass
+conda create --name fromAssembly2feature
 conda activate fromAssembly2feature
+    plasclass
+conda install -c bioconda prodigal
+conda install -c bioconda samtools
+conda install -c bioconda blast
+conda install -c bioconda plasclass
+conda install -c r r-essentials
+
+#open R
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("Biostrings")
+
+install.packages("msa")
+install.packages("seqinr")
+install.packages("reshape2")
 
 ```
 
