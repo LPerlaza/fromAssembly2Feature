@@ -38,9 +38,9 @@ conda install -c r r-essentials
 if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
 
+BiocManager::install("msa")
 BiocManager::install("Biostrings")
 
-install.packages("msa")
 install.packages("seqinr")
 install.packages("reshape2")
 
