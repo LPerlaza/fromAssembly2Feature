@@ -27,7 +27,7 @@ You can create a conda environment with all the dependencies:
 ```
 conda create --name fromAssembly2feature
 conda activate fromAssembly2feature
-    plasclass
+
 conda install -c bioconda prodigal
 conda install -c bioconda samtools
 conda install -c bioconda blast
