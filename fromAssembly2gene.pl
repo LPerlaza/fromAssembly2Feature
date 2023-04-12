@@ -15,6 +15,7 @@ use File::Copy;
 ##debug ./fromAssembly2gene.pl -a test_assembly/*fasta -g test_genes/NT/*fasta -o test1_NT -c 1 -p 
 #######################################################################################################################################################################################################################################################################################################################################################################
 #global variables
+my $version_updated="Version 2.22. Program Last updated 12th April 2023";
 my $start = time;
 my @seq=();
 my @genes=();
@@ -55,7 +56,6 @@ if ($help){
  }
 
 if ($version){
-	$version_updated="Version 2.22. Program Last updated 12th April 2023";
 print STDERR "\n $version_updated \n\n";
  exit(1); 
  }
