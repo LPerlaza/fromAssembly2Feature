@@ -48,7 +48,7 @@ install.packages("reshape2")
 
 ## INSTALL 
 ```
-git clone git@github.com:LPerlaza/fromAssembly2Feature.git
+git clone https://github.com/LPerlaza/fromAssembly2Feature.git
 cd Assembly2Gene
 chmod a+x fromAssembly2gene.pl
 ```	 		
@@ -72,7 +72,7 @@ it separates chromosome and plasmids from assembled genomes and find the genes o
 
 ## RUN
 																						
- From Assemblies to genes (Version  22th June 2021)																																															
+ From Assemblies to genes (Version 12th april 2023)																																															
  																																	
 Detect genes in an assembly, and get their detailed alignments and description using fromAssembly2gene. 		
 It generates descriptive tables of presence, absence and truncated  genes, curated alignments and peptides predictions.													
