@@ -2582,8 +2582,8 @@ foreach my $program(@programs){print "checking for $program\n"; check_exists_com
 
 #######################################################################################################################################################################################################################################################################################################################################################################
 #copy input files 
-foreach my $files(@seq){ if (-e $files) { copy($files,$dirModifiedGenomes);} else { die "$files does not exist! Check yout command line\n";}};
-foreach my $files(@genes){ if (-e $files){ copy($files,$dirModifiedGenes);}  else { die "$files does not exist! Check yout command line\n";}};
+foreach my $files(@seq){ if (-e $files) { copy($files,$dirModifiedGenomes);} else { die "\n\nFATAL ERROR:$files does not exist! Check your command line\n\n";}};
+foreach my $files(@genes){ if (-e $files){ copy($files,$dirModifiedGenes);}  else { die "\n\nFATAL ERROR:$files does not exist! Check your command line\n\n";}};
 
 opendir(my $dir_open_seq, $dirModifiedGenomes) or die "Cannot open directory $dirModifiedGenomes: $!";
 my @seq_array = grep { -T "$dirModifiedGenomes/$_" } readdir $dir_open_seq;
