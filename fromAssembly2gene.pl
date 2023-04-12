@@ -2578,7 +2578,7 @@ if(nSeq>1){
 #check dependencies
 
 my @programs = ("cat", "mkdir", "sed","chmod","Rscript","rm","find","xargs","awk","grep","mv","makeblastdb","cp","cut","samtools","prodigal");
-foreach my $program(@programs){ check_exists_command $program or die "$program doesn't exists"}
+foreach my $program(@programs){print "checking for $program"; check_exists_command $program or die "$program doesn't exists"}
 
 #######################################################################################################################################################################################################################################################################################################################################################################
 #copy input files 
