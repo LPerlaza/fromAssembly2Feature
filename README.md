@@ -72,7 +72,7 @@ it separates chromosome and plasmids from assembled genomes and find the genes o
 
 ## RUN
 																						
- From Assemblies to genes (Version 12th april 2023)																																															
+ From Assemblies to genes 																																													
  																																	
 Detect genes in an assembly, and get their detailed alignments and description using fromAssembly2gene. 		
 It generates descriptive tables of presence, absence and truncated  genes, curated alignments and peptides predictions.													

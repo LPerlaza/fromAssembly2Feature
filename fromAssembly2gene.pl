@@ -55,7 +55,8 @@ if ($help){
  }
 
 if ($version){
-print STDERR "\nVersion 2.22. Program Last updated 12th April 2023 \n\n";
+	$version_updated="Version 2.22. Program Last updated 12th April 2023";
+print STDERR "\n $version_updated \n\n";
  exit(1); 
  }
 
@@ -109,7 +110,7 @@ sub usage{
  print STDERR <<EOF;
  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 																																	
- From Assemblies to genes (Program Last updated 12th April 2023)																									
+ From Assemblies to genes $version_updated																								
  																																	
 Detect genes in an assembly, and get their detailed alignments and description using fromAssembly2gene. 		
 It generates descriptive tables of presence, absence and truncated  genes, curated alignments and peptides predictions.													
@@ -2577,8 +2578,22 @@ if(nSeq>1){
 #######################################################################################################################################################################################################################################################################################################################################################################
 #check dependencies
 
+print "
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+\t\t CHECKING DEPENDENCIES AND REQUIRED PROGRAMS
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n";
+
 my @programs = ("cat", "mkdir", "sed","chmod","Rscript","rm","find","xargs","awk","grep","mv","makeblastdb","cp","cut","samtools","prodigal");
 foreach my $program(@programs){print "checking for $program\n"; check_exists_command $program or die "$program doesn't exists"}
+
+print "
+-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+
+\t\t DONE CHECKING DEPENDENCIES AND REQUIRED PROGRAMS
+  
+-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-\n\n";
 
 #######################################################################################################################################################################################################################################################################################################################################################################
 #copy input files 
