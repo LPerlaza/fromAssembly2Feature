@@ -1,0 +1,524 @@
+#was sub2
+
+
+
+
+ my ($dirproplas, $dirprochr,$input_plasmid,$input_chr,$output_plasmid,$output_chr,$output_plasmid,$output_chr) = var inputs($genome)
+
+sub var_inputs{
+    my $genome=basename($seq);
+	my $dirproplas=$diroutput."/".$genome.".plasmid";	
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
+	my $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
+	my $output_plasmid=$input_plasmid;
+	my $output_chr=$input_chr;
+	$output_plasmid=~s/_contigslist.txt/.fasta/g;
+	$output_chr=~s/_contigslist.txt/.fasta/g;
+}
+
+
+sub sub_samtools{
+	my $seq = shift;
+    my ($dirproplas, $dirprochr,$input_plasmid,$input_chr,$output_plasmid,$output_chr,$output_plasmid,$output_chr) = var inputs($genome)
+
+	if(-s $input_plasmid){
+		my $temp_plasmid=$output_plasmid.".tmp";
+		my $temp_plasmid_1=$output_plasmid.".tmp1";
+    	my $cmd_cut="cut -d \" \" -f1 $input_plasmid >$temp_plasmid";
+    	system($cmd_cut);
+		system("xargs samtools faidx $seq< $temp_plasmid > $temp_plasmid_1");
+		my $cmd_awk="awk '/^>/{gsub(\" \",\"_\"); \$0=\$0\"\\:$genome"."_plasmid\"}1' $temp_plasmid_1 >$output_plasmid";
+		system($cmd_awk);
+		system( "rm $temp_plasmid");
+		system( "rm $temp_plasmid_1");
+	}
+	if( -s $input_chr){
+		my $temp_chr=$output_chr.".tmp";
+		my $temp_chr_1=$output_chr.".tmp1";
+    	my $cmd_cut1="cut -d \" \" -f1 $input_chr >$temp_chr";
+		system($cmd_cut1);
+		system("xargs samtools faidx $seq< $temp_chr > $temp_chr_1");
+		my $cmd_awk1="awk '/^>/{gsub(\" \",\"_\"); \$0=\$0\"\\:$genome"."_chr\"}1' $temp_chr_1 >$output_chr";
+		system($cmd_awk1);
+		system( "rm $temp_chr");
+		system( "rm $temp_chr_1");
+	}
+}
+
+#was sub3  
+sub sub_prodigal{
+	my $seq = shift;
+	my $genome=basename($seq);
+    my ($dirproplas, $dirprochr,$input_plasmid,$input_chr,$output_plasmid,$output_chr,$output_plasmid,$output_chr,$name_output_plasmid,$name_output_chr) = var_inputs($genome)
+	if(-s $output_plasmid){
+		my $genes_gff= $dirproplas."/".$genome.".plasmid.genes.gff";
+		my $genes_gfftmp= $dirproplas."/".$genome.".plasmid.genes.gfftmp";
+		my $genes_faa= $dirproplas."/".$genome.".plasmid.genes.faa";
+		my $genes_fasta= $dirproplas."/".$genome.".plasmid.genes.fasta";
+		my $temp=$genes_fasta.".tmp";
+		system("prodigal -i $output_plasmid -o $genes_gfftmp -a $genes_faa -d $genes_fasta -f gff -q -p meta");
+		system("\(cat $genes_gfftmp; echo '##FASTA'; cat $output_plasmid\) >$genes_gff");              
+		system("rm $genes_gfftmp");       
+	}
+	if(-s $output_chr ){
+		my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
+		my $genes_gff1tmp=$dirprochr."/".$genome.".chr.genes.gfftmp";
+		my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
+		my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
+		my $temp1=$genes_fasta1.".tmp";
+		system("prodigal -i $output_chr -o $genes_gff1tmp -a $genes_faa1 -d $genes_fasta1 -f gff -q  -p meta");
+		system("\(cat $genes_gff1tmp; echo '##FASTA'; cat  $output_chr\) >$genes_gff1");              
+		system("rm $genes_gff1tmp");
+	}
+}
+
+
+#was sub4
+sub sub_modifed_header_chrplas{
+	my $seq = shift;
+	my $genome=basename($seq);
+	my $dirproplas=$diroutput."/".$genome.".plasmid";
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
+ 	my $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
+	my $output_plasmid=$input_plasmid;
+    my $output_chr=$input_chr;
+	$output_plasmid=~s/_contigslist.txt/.fasta/g;
+	$output_chr=~s/_contigslist.txt/.fasta/g;
+	my $name_output_plasmid=$output_plasmid;
+ 	$name_output_plasmid=~s/.fasta$//;
+	my $name_output_chr=$output_chr;
+ 	$name_output_chr=~s/.fasta$//;
+	my $genes_gff= $dirproplas."/".$genome.".plasmid.genes.gff";
+	my $genes_faa= $dirproplas."/".$genome.".plasmid.genes.faa";	
+	my $genes_fasta= $dirproplas."/".$genome.".plasmid.genes.fasta";
+	my $temp=$genes_fasta.".tmp";
+	my $temp_1=$genes_faa.".tmp";
+	if(-s $genes_fasta){
+		system("cp $genes_fasta $temp");
+		my $cmd="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp  > $genes_fasta";
+		system($cmd);
+		system("sed 's/ # /###/g' $genes_fasta >$temp");
+		system("mv $temp $genes_fasta");
+		system("cp $genes_faa $temp_1");
+		my $cmd_prt="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp_1  > $genes_faa";
+		system( $cmd_prt);
+		system("sed 's/ # /###/g' $genes_faa >$temp_1");
+		system("mv $temp_1 $genes_faa");
+	}
+	my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
+	my $temp1=$genes_fasta1.".tmp";
+	my $temp1_1=$genes_faa1.".tmp";
+	if(-s $genes_fasta1){
+		system("cp $genes_fasta1 $temp1");
+		my $cmd1="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp1  > $genes_fasta1";
+		system($cmd1);
+		system("sed 's/ # /###/g' $genes_fasta1 >$temp1");
+		system("mv $temp1 $genes_fasta1");
+		system("cp $genes_faa1 $temp1_1");
+		my $cmd_prt1="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp1_1 > $genes_faa1";
+		system($cmd_prt1);
+		system("sed 's/ # /###/g' $genes_faa1 >$temp1_1");
+		system("mv $temp1_1 $genes_faa1");
+	}
+}
+
+#was sub 5
+sub sub_blast_chrplas{
+	my $seq = shift;
+	my $genome=basename($seq);
+	my $dirproplas=$diroutput."/".$genome.".plasmid";	
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
+	my $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
+	my $output_plasmid=$input_plasmid;
+	my $output_chr=$input_chr;
+	$output_plasmid=~s/_contigslist.txt/.fasta/g;
+	$output_chr=~s/_contigslist.txt/.fasta/g;
+	 my $name_output_plasmid=$output_plasmid;
+ 	$name_output_plasmid=~s/.fasta$//;
+	my $name_output_chr=$output_chr;
+ 	$name_output_chr=~s/.fasta$//;
+	my $genes_gff= $dirproplas."/".$genome.".plasmid.genes.gff";
+	my $genes_faa= $dirproplas."/".$genome.".plasmid.genes.faa";
+	my $genes_fasta= $dirproplas."/".$genome.".plasmid.genes.fasta";
+	my $temp=$genes_fasta.".tmp";
+	my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
+	my $temp1=$genes_fasta1.".tmp";
+	foreach my $gene(@genes){
+		my $genename=basename($gene);
+		my $gene_id=$dirModifiedGenes."/".$genename;
+		$gene_id=~s/.fasta$//g;
+		my $gene_tag=basename($gene);
+		$gene_tag=~s/.fasta$//g;
+		my $outputblast= $name_output_plasmid.".".$gene_tag.".Blast.txt";
+		my $outputblast1= $name_output_chr.".".$gene_tag.".Blast.txt";
+		my $tempblast=$outputblast.".tmp";
+		my $tempblast1=$outputblast1.".tmp";
+		if ($genes_type eq"nucl"){	
+			if(-s $genes_fasta){
+				my $cmd_blast="blastn -query $genes_fasta -db $gene_id -dust no -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send mismatch gapope evalue bitscore\" -perc_identity $percentage -out $outputblast";
+				system ($cmd_blast);
+				} 
+			if(-s $genes_fasta1){
+				my $cmd_blast1="blastn -query $genes_fasta1 -db $gene_id -dust no -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send mismatch gapope evalue bitscore\" -perc_identity $percentage -out $outputblast1";
+				system ($cmd_blast1);
+				}
+		}elsif ($genes_type eq "prot"){
+			if(-s $genes_fasta){
+				my $cmd_blast="blastp -query $genes_faa -db $gene_id  -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send evalue bitscore qcovs qcovhsp scovhsp\"  -out $outputblast";
+				system ($cmd_blast);
+				my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast >$tempblast";
+				system ($cmd_highper);
+				system (" mv $tempblast $outputblast")
+			}
+			if(-s $genes_fasta1){
+				my $cmd_blast1="blastp -query $genes_faa1 -db $gene_id -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send evalue bitscore qcovs qcovhsp scovhsp\"  -out $outputblast1";
+				system ($cmd_blast1);
+				my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast1";
+				system ($cmd_highper);
+				system (" mv $tempblast1 $outputblast1");
+			}
+		}
+	}
+}
+
+
+#was sub5_1
+sub sub_percentage_threshold{
+	my $seq = shift;
+	my $genome=basename($seq);
+	my $dirproplas=$diroutput."/".$genome.".plasmid";	
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
+	my $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
+	my $output_plasmid=$input_plasmid;
+	my $output_chr=$input_chr;
+	$output_plasmid=~s/_contigslist.txt/.fasta/g;
+	$output_chr=~s/_contigslist.txt/.fasta/g;
+	my $name_output_plasmid=$output_plasmid;
+ 	$name_output_plasmid=~s/.fasta$//;
+	my $name_output_chr=$output_chr;
+ 	$name_output_chr=~s/.fasta$//;
+	my $genes_gff= $dirproplas."/".$genome.".plasmid.genes.gff";
+	my $genes_faa= $dirproplas."/".$genome.".plasmid.genes.faa";
+	my $genes_fasta= $dirproplas."/".$genome.".plasmid.genes.fasta";
+	my $temp=$genes_fasta.".tmp";
+	my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
+	my $temp1=$genes_fasta1.".tmp";
+	foreach my $gene(@genes){
+		my $genename=basename($gene);
+		my $gene_id=$dirModifiedGenes."/".$genename;
+		$gene_id=~s/.fasta$//g;
+		my $gene_tag=basename($gene);
+		$gene_tag=~s/.fasta$//g;
+		my $outputblast= $name_output_plasmid.".".$gene_tag.".Blast.txt";
+		my $outputblast1= $name_output_chr.".".$gene_tag.".Blast.txt";
+		my $tempblast=$outputblast.".tmp";
+		my $tempblast1=$outputblast1.".tmp";
+		if ($genes_type eq"nucl"){	
+			if(-s $genes_fasta){
+				my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast >$tempblast";
+				system ($cmd_highper);
+				system (" mv $tempblast $outputblast")
+				}
+			if(-s $genes_fasta1){
+				my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast1";
+				system ($cmd_highper);
+				system (" mv $tempblast1 $outputblast1");
+				}
+		}elsif ($genes_type eq "prot"){
+			if(-s $genes_fasta){
+				my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast >$tempblast";
+				system ($cmd_highper);
+				system (" mv $tempblast $outputblast")
+				}
+			if(-s $genes_fasta1){
+				my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast1";
+				system ($cmd_highper);
+				system (" mv $tempblast1 $outputblast1");
+				}
+		}
+	}
+}
+
+#was sub6
+sub sub_curate_alignment{
+	my $seq = shift;
+	my $genome=basename($seq);
+	my $dirproplas=$diroutput."/".$genome.".plasmid";	
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $input_plasmid=$dirproplas."/".$genome.".plasmid_contigslist.txt";
+	my $input_chr=$dirprochr."/".$genome.".chromosome_contigslist.txt";
+	my $output_plasmid=$input_plasmid;
+	my $output_chr=$input_chr;
+	$output_plasmid=~s/_contigslist.txt/.fasta/g;
+	$output_chr=~s/_contigslist.txt/.fasta/g;
+	my $name_output_plasmid=$output_plasmid;
+	$name_output_plasmid=~s/.fasta$//;
+	my $name_output_chr=$output_chr;
+ 	$name_output_chr=~s/.fasta$//;
+	my $genes_gff= $dirproplas."/".$genome.".plasmid.genes.gff";
+	my $genes_faa= $dirproplas."/".$genome.".plasmid.genes.faa";
+	my $genes_fasta= $dirproplas."/".$genome.".plasmid.genes.fasta";
+	my $temp=$genes_fasta.".tmp";
+	my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
+	my $temp1=$genes_fasta1.".tmp";
+	foreach my $gene(@genes){
+		my $genename=basename($gene);
+		my $gene_id=$dirModifiedGenes."/".$genename;
+		$gene_id=~s/.fasta$//g;
+		my $gene_tag=basename($gene);
+		$gene_tag=~s/.fasta$//g;
+		my $outputblast= $name_output_plasmid.".".$gene_tag.".Blast.txt";
+		my $outputblast1= $name_output_chr.".".$gene_tag.".Blast.txt";
+		my $gene_ref=$gene_id.".fasta";
+		if(-s $outputblast){
+			my $temp_plasmid=$name_output_plasmid.".".$gene_tag.".tmp";
+			system("cut -f 1 $outputblast >$temp_plasmid");
+			my $output_gene= $name_output_plasmid.".".$gene_tag.".fasta";
+			if( $genes_type eq 'nucl'){
+				system("xargs samtools faidx $genes_fasta< $temp_plasmid >$output_gene");
+				}elsif($genes_type eq 'prot'){
+					system("xargs samtools faidx $genes_faa< $temp_plasmid >$output_gene");
+					}
+			system("rm $temp_plasmid");
+			my $output_ref_plasmid=$output_gene.".plusRef.fasta";
+			system("cat $gene_ref $output_gene >$output_ref_plasmid");
+			my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".plasmid.out.alignments.description";
+			open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
+			my $gene_genome_plas_out_alignment_AA_fasta=$dirresultspep."/".$gene_tag."_".$genome.".plasm.AAsequence.fasta";
+			open OUT1, ">$gene_genome_plas_out_alignment_AA_fasta" or die "Cannot open $gene_genome_plas_out_alignment_AA_fasta for writing\n";
+			my $gene_genome_plas_out_alignment_nt_fasta=$dirresults."/".$gene_tag."_".$genome.".plasm.nt_alignment.fasta.tmp";
+			open OUT2, ">$gene_genome_plas_out_alignment_nt_fasta" or die "Cannot open  $gene_genome_plas_out_alignment_nt_fasta for writing\n";
+			#print "Rscript curatingAlignments.r $output_ref_plasmid $gene_tag $gene_genome_plas_out_alignment_nt_fasta $gene_genome_plas_out_alignment_AA_fasta $out_alignment_description --slave\n\n";
+			system(" Rscript $results_folder/scripts/curatingAlignments.r $output_ref_plasmid $gene_tag $gene_genome_plas_out_alignment_nt_fasta $gene_genome_plas_out_alignment_AA_fasta $out_alignment_description --slave");
+		}else { 
+ 			my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".plasmid.out.alignments.description";
+			open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
+			my $firstline_Ref=`grep ">" $gene_id.fasta`;
+			chomp($firstline_Ref);
+			$firstline_Ref=~s/[\n\r]//g;
+			$firstline_Ref=~s/>//g;
+			print OUT "$genename\t\"$firstline_Ref\"\tNA\tNA\tNA\t\"$genome\"\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tplasmid\tabsent\t0\t0\t0\n";
+			close OUT;
+ 		}
+		if(-s $outputblast1){
+			my $temp_chr=$name_output_chr.".".$gene_tag.".tmp";
+			system("cut -f 1 $outputblast1 >$temp_chr");
+			my $output_gene1= $name_output_chr.".".$gene_tag.".fasta";
+			if( $genes_type eq 'nucl'){
+				system("xargs samtools faidx $genes_fasta1< $temp_chr >$output_gene1");
+			}elsif($genes_type eq 'prot'){
+				system("xargs samtools faidx $genes_faa1< $temp_chr >$output_gene1");
+				}
+				system("rm $temp_chr");
+				my $output_ref_chr=$output_gene1.".plusRef.fasta";
+				system("cat $gene_ref $output_gene1 >$output_ref_chr");
+				my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".chr.out.alignments.description";
+				open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
+				my $gene_genome_chr_out_alignment_AA_fasta=$dirresultspep."/".$gene_tag."_".$genome.".chr.AAsequence.fasta";
+				open OUT1, ">$gene_genome_chr_out_alignment_AA_fasta" or die "Cannot open $gene_genome_chr_out_alignment_AA_fasta for writing\n";
+				my $gene_genome_chr_out_alignment_nt_fasta=$dirresults."/".$gene_tag."_".$genome.".chr.nt_alignment.fasta.tmp";
+				open OUT2, ">$gene_genome_chr_out_alignment_nt_fasta" or die "Cannot open  $gene_genome_chr_out_alignment_nt_fasta for writing\n";
+	  			#print " Rscript curatingAlignments.r  $output_ref_chr $gene_tag $gene_genome_chr_out_alignment_nt_fasta $gene_genome_chr_out_alignment_AA_fasta $out_alignment_description --slave\n\n";
+				system(" Rscript $results_folder/scripts/curatingAlignments.r  $output_ref_chr $gene_tag $gene_genome_chr_out_alignment_nt_fasta $gene_genome_chr_out_alignment_AA_fasta $out_alignment_description --slave");
+		}else { 
+ 				my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".chr.out.alignments.description";
+				open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
+				my $firstline_Ref=`grep ">" $gene_id.fasta`;
+				chomp($firstline_Ref);
+				$firstline_Ref=~s/[\n\r]//g;
+				$firstline_Ref=~s/>//g;
+				print OUT "$genename\t\"$firstline_Ref\"\tNA\tNA\tNA\t\"$genome\"\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tchromosome\tabsent\t0\t0\t0\n";
+				close OUT;
+	 	}
+	}
+}
+
+
+####################################################################################################################################################################################################################################################################################
+#No Plasmid 
+
+
+#was sub1_chr
+
+
+
+#sub3_chr
+sub sub_change_genome_header{
+	my $seq = shift;
+	my $genome=basename($seq);
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_gff1tmp=$dirprochr."/".$genome.".chr.genes.gfftmp";
+	my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_faa1tmp=$dirprochr."/".$genome.".chr.genes.faatmp";
+	my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
+	my $genes_fasta1tmp=$dirprochr."/".$genome.".chr.genes.fastatmp";
+	my $cmd_awk1="awk '/^>/{\$0=\$0\"\\:$genome\"}1'  $genes_gff1 > $genes_gff1tmp";
+	my $cmd_awk2="awk '/^>/{\$0=\$0\"\\:$genome\"}1'  $genes_faa1 > $genes_faa1tmp";
+	my $cmd_awk3="awk '/^>/{\$0=\$0\"\\:$genome\"}1'  $genes_fasta1 > $genes_fasta1tmp";
+	system($cmd_awk1);
+	system($cmd_awk2);
+	system($cmd_awk3);
+	system("mv $genes_gff1tmp $genes_gff1");
+	system("mv $genes_faa1tmp $genes_faa1");
+	system("mv $genes_fasta1tmp $genes_fasta1");
+}
+
+#was sub4_chr
+sub sub4_chr{
+	my $seq = shift;
+	my $genome=basename($seq);
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
+	my $temp1=$genes_fasta1.".tmp";
+	my $temp2=$genes_faa1.".tmp";
+	if(-s $genes_fasta1){
+		system("cp $genes_fasta1 $temp1");
+		my $cmd1="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp1  > $genes_fasta1";
+		system( $cmd1);
+		system("cp $genes_fasta1 $temp2");
+		my $cmd2="awk '/^>/ {printf(\"\\n%s\\n\",\$0);next; } { printf(\"\%s\",\$0);}  END {printf(\"\\n\");}' < $temp2  > $genes_faa1";
+		system( $cmd2);
+		system("sed 's/ # /###/g' $genes_fasta1 >$temp1");
+		system("mv $temp1 $genes_fasta1");
+		system("sed 's/ # /###/g' $genes_faa1 >$temp2");
+		system("mv $temp2 $genes_faa1");
+	}
+}
+
+
+#was sub 5
+sub sub_blast_chr{
+	my $seq = shift;
+	my $genome=basename($seq);
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
+	my $temp1=$genes_fasta1.".tmp";
+	foreach my $gene(@genes){
+		my $genename=basename($gene);
+		my $gene_id=$dirModifiedGenes."/".$genename;
+		$gene_id=~s/.fasta$//g;
+		my $gene_tag=basename($gene);
+		$gene_tag=~s/.fasta$//g;
+		my $outputblast1= $dirprochr."/".$genome.".".$gene_tag.".Blast.txt";
+		my $tempblast=$outputblast1.".tmp";
+	if ($genes_type eq "nucl"){
+		if(-s $genes_fasta1){
+			my $cmd_blast1="blastn -query $genes_fasta1 -db $gene_id -dust no -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send mismatch gapope evalue bitscore\" -perc_identity $percentage -out $outputblast1";
+			system ($cmd_blast1);
+			}
+		}elsif ($genes_type eq "prot"){
+			if(-s $genes_fasta1){
+				my $cmd_blast1="blastp -query $genes_faa1 -db $gene_id -outfmt \"6 qseqid sseqid pident qlen slen length qstart qend sstart send evalue bitscore qcovs qcovhsp scovhsp\" -out $outputblast1";
+				#print "$cmd_blast1\n";
+				system ($cmd_blast1);
+				my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage."  && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast";
+				system ($cmd_highper);
+				system ("mv $tempblast $outputblast1")
+			}
+		}	
+	}
+}
+
+#was sub5_1chr
+sub sub5_1chr{
+	my $seq = shift;
+	my $genome=basename($seq);
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
+	my $temp1=$genes_fasta1.".tmp";
+	foreach my $gene(@genes){
+		my $genename=basename($gene);
+		my $gene_id=$dirModifiedGenes."/".$genename;
+		$gene_id=~s/.fasta$//g;
+		my $gene_tag=basename($gene);
+		$gene_tag=~s/.fasta$//g;
+		my $outputblast1= $dirprochr."/".$genome.".".$gene_tag.".Blast.txt";
+		my $tempblast=$outputblast1.".tmp";
+  		if ($genes_type eq "nucl"){
+			if(-s $genes_fasta1){
+				my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast";
+				system ($cmd_highper);
+				system (" mv $tempblast $outputblast1")
+			}
+		}elsif ($genes_type eq "prot"){
+			if(-s $genes_fasta1){
+				my $cmd_highper="awk '\$3>=".$percentage." && \$13>=".$percentage." {print \$0}' < $outputblast1 >$tempblast";
+				system ($cmd_highper);
+				system (" mv $tempblast $outputblast1")
+			}
+		}
+		
+	}
+
+}
+
+# was sub6_chr
+sub sub6_chr{
+	my $seq = shift;
+	$seq=$dirModifiedGenomes."/".$seq;
+	my $genome=basename($seq);
+	my $dirprochr=$diroutput."/".$genome.".chromosome";
+	my $genes_gff1=$dirprochr."/".$genome.".chr.genes.gff";
+	my $genes_faa1=$dirprochr."/".$genome.".chr.genes.faa";
+	my $genes_fasta1=$dirprochr."/".$genome.".chr.genes.fasta";
+	my $temp1=$genes_fasta1.".tmp";
+	foreach my $gene(@genes){
+		my $genename=basename($gene);
+		my $gene_id=$dirModifiedGenes."/".$genename;
+		$gene_id=~s/.fasta$//g;
+		my $gene_tag=basename($gene);
+		$gene_tag=~s/.fasta$//g;
+		my $outputblast1= $dirprochr."/".$genome.".".$gene_tag.".Blast.txt";
+		my $gene_ref=$gene_id.".fasta";
+		print($outputblast1);
+		if(-s $outputblast1){
+			my $temp_chr=$dirprochr.".".$gene_tag.".tmp";
+			system("cut -f 1 $outputblast1 >$temp_chr");
+			my $output_gene1= $dirprochr."/".$gene_tag.".fasta";
+			if( $genes_type eq 'nucl'){
+				system("xargs samtools faidx $genes_fasta1< $temp_chr >$output_gene1");
+			}elsif($genes_type eq 'prot'){
+				system("xargs samtools faidx $genes_faa1< $temp_chr >$output_gene1");
+				}
+			system("rm $temp_chr");
+			my $output_ref_chr=$dirprochr."/".$genome.".".$gene_tag.".plusRef.fasta";
+			system("cat $gene_ref $output_gene1 >$output_ref_chr");
+			my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".chr.out.alignments.description";
+			open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
+			my $gene_genome_chr_out_alignment_AA_fasta=$dirresultspep."/".$gene_tag."_".$genome.".AAsequence.fasta";
+			open OUT1, ">$gene_genome_chr_out_alignment_AA_fasta" or die "Cannot open $gene_genome_chr_out_alignment_AA_fasta for writing\n";
+			my $gene_genome_chr_out_alignment_nt_fasta=$dirresults."/".$gene_tag."_".$genome.".nt_alignment.fasta.tmp";
+			open OUT2, ">$gene_genome_chr_out_alignment_nt_fasta" or die "Cannot open  $gene_genome_chr_out_alignment_nt_fasta for writing\n";
+			system(" Rscript $results_folder/scripts/curatingAlignments.r  $output_ref_chr $gene_tag $gene_genome_chr_out_alignment_nt_fasta $gene_genome_chr_out_alignment_AA_fasta $out_alignment_description --slave");
+		}else { 
+ 			my $out_alignment_description=$dirresults."/".$genome.".".$gene_tag.".chr.out.alignments.description";
+			open OUT, ">$out_alignment_description" or die "Cannot open $out_alignment_description for writing\n";
+			my $firstline_Ref=`grep ">" $gene_id.fasta`;
+			chomp($firstline_Ref);
+			$firstline_Ref=~s/[\n\r]//g;
+			$firstline_Ref=~s/>//g;
+			print OUT "$genename\t\"$firstline_Ref\"\tNA\tNA\tNA\t\"$genome\"\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tchromosome\tabsent\t0\t0\t0\n";
+			close OUT;
+		}
+	}
+}
+
