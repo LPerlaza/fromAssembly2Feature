@@ -2578,12 +2578,12 @@ if(nSeq>1){
 #check dependencies
 
 my @programs = ("cat", "mkdir", "sed","chmod","Rscript","rm","find","xargs","awk","grep","mv","makeblastdb","cp","cut","samtools","prodigal");
-foreach my $program(@programs){print "checking for $program"; check_exists_command $program or die "$program doesn't exists"}
+foreach my $program(@programs){print "checking for $program\n"; check_exists_command $program or die "$program doesn't exists"}
 
 #######################################################################################################################################################################################################################################################################################################################################################################
 #copy input files 
-foreach my $files(@seq){ copy($files,$dirModifiedGenomes)};
-foreach my $files(@genes){ copy($files,$dirModifiedGenes)};
+foreach my $files(@seq){ if (-e $files) { copy($files,$dirModifiedGenomes);} else { die "$files does not exist! Check yout command line\n";}};
+foreach my $files(@genes){ if (-e $files){ copy($files,$dirModifiedGenes);}  else { die "$files does not exist! Check yout command line\n";}};
 
 opendir(my $dir_open_seq, $dirModifiedGenomes) or die "Cannot open directory $dirModifiedGenomes: $!";
 my @seq_array = grep { -T "$dirModifiedGenomes/$_" } readdir $dir_open_seq;
