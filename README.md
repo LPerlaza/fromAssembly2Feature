@@ -49,8 +49,8 @@ install.packages("reshape2")
 ## INSTALL 
 ```
 git clone https://github.com/LPerlaza/fromAssembly2Feature.git
-cd Assembly2Gene
-chmod a+x fromAssembly2gene.pl
+cd fromAssembly2Feature
+chmod a+x fromAssembly2Feature.pl
 ```	 		
 
 # From Assembly to Gene (fromAssembly2gene.pl)
